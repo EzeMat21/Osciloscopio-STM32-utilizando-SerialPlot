@@ -57,14 +57,15 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define PIN_DEBUG_Pin GPIO_PIN_1
-#define PIN_DEBUG_GPIO_Port GPIOA
-#define BUFF_PING_Pin GPIO_PIN_2
-#define BUFF_PING_GPIO_Port GPIOA
-#define BUFF_PONG_Pin GPIO_PIN_3
-#define BUFF_PONG_GPIO_Port GPIOA
-#define DEBUG2_Pin GPIO_PIN_4
-#define DEBUG2_GPIO_Port GPIOA
+#define TIMER_INTERRUPT_Pin GPIO_PIN_1
+#define TIMER_INTERRUPT_GPIO_Port GPIOA
+#define ADC_TRIGGER_Pin GPIO_PIN_2
+#define ADC_TRIGGER_GPIO_Port GPIOA
+#define BOTON_Pin GPIO_PIN_5
+#define BOTON_GPIO_Port GPIOA
+#define BOTON_EXTI_IRQn EXTI9_5_IRQn
+#define BUFFER_LLENO_Pin GPIO_PIN_0
+#define BUFFER_LLENO_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

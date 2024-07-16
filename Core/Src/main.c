@@ -33,28 +33,32 @@
 typedef enum{
 	INICIO,
 	GUARDANDO_EN_PING,
-	GUARDANDO_EN_PONG
+	GUARDANDO_EN_PONG,
+	PAUSA
 
 }estados_t;
 
 typedef enum{
 
-	start_adc,
-	evt_buffer_lleno
+	//start_adc,
+	boton_presionado,
+	evt_buffer_lleno,
+	trigger_disparado
 
 }eventos_t;
 
-#define START_BYTE 0xAA;
-#define OFFSET_INICIO 2
-#define OFFSET 2
+
+#define OFFSET 1
+#define BYTE_START 0xAA
+
 
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-#define MAX 50
-#define TAMANO 2*MAX
+#define MAX 25
+#define TAMANO 100
 
 /* USER CODE END PD */
 
@@ -65,10 +69,11 @@ typedef enum{
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
+ADC_HandleTypeDef hadc2;
 
 TIM_HandleTypeDef htim2;
 
-UART_HandleTypeDef huart1;
+UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN PV */
 
@@ -86,6 +91,16 @@ uint8_t *posicion_final_puntero_lectura;
 
 uint16_t debug;
 
+//Modificaciones 05/07
+
+uint16_t trigger_valor = 300;
+uint8_t trigger_flag = 0;
+uint8_t flag = 1;
+uint16_t trigger_contador = 0;
+
+#define MAX_BUFFER_TRIGGER 6
+
+
 
 /* USER CODE END PV */
 
@@ -94,7 +109,8 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM2_Init(void);
-static void MX_USART1_UART_Init(void);
+static void MX_USART3_UART_Init(void);
+static void MX_ADC2_Init(void);
 /* USER CODE BEGIN PFP */
 
 void UART_TX_PING();
@@ -108,7 +124,7 @@ void Swap_Buffer(uint8_t swap_condicion);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 estados_t estado = INICIO;
-eventos_t evt = start_adc;
+eventos_t evt = evt_buffer_lleno;
 
 /* USER CODE END 0 */
 
@@ -118,6 +134,7 @@ eventos_t evt = start_adc;
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -142,7 +159,8 @@ int main(void)
   MX_GPIO_Init();
   MX_ADC1_Init();
   MX_TIM2_Init();
-  MX_USART1_UART_Init();
+  MX_USART3_UART_Init();
+  MX_ADC2_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -151,17 +169,15 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
+  //fsm(&estado, evt);
 
-  /*bufferPING[0] = START_BYTE;
-  bufferPONG[0] = START_BYTE;
-  bufferPING[1] = MAX;
-  bufferPONG[1] = MAX;*/
-  fsm(&estado, evt);
+  //bufferPING[0] = BYTE_START;
+  //bufferPONG[0] = BYTE_START;
 
 
   while (1)
   {
-	  debug = (*(puntero_escritura) <<8) + *(puntero_escritura+1);
+	  //debug = (*(puntero_escritura) <<8) + *(puntero_escritura+1);
 
 	  if(UART_TX_PING_flag == 1){
 
@@ -200,7 +216,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL2;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -215,12 +231,12 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
-  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV2;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -249,7 +265,7 @@ static void MX_ADC1_Init(void)
   */
   hadc1.Instance = ADC1;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
@@ -275,6 +291,53 @@ static void MX_ADC1_Init(void)
 }
 
 /**
+  * @brief ADC2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC2_Init(void)
+{
+
+  /* USER CODE BEGIN ADC2_Init 0 */
+
+  /* USER CODE END ADC2_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC2_Init 1 */
+
+  /* USER CODE END ADC2_Init 1 */
+
+  /** Common config
+  */
+  hadc2.Instance = ADC2;
+  hadc2.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc2.Init.ContinuousConvMode = DISABLE;
+  hadc2.Init.DiscontinuousConvMode = DISABLE;
+  hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc2.Init.NbrOfConversion = 1;
+  if (HAL_ADC_Init(&hadc2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC2_Init 2 */
+
+  /* USER CODE END ADC2_Init 2 */
+
+}
+
+/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -293,9 +356,9 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 16-1;
+  htim2.Init.Prescaler = 72-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 1000-1;
+  htim2.Init.Period = 16-1;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -320,35 +383,35 @@ static void MX_TIM2_Init(void)
 }
 
 /**
-  * @brief USART1 Initialization Function
+  * @brief USART3 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_USART1_UART_Init(void)
+static void MX_USART3_UART_Init(void)
 {
 
-  /* USER CODE BEGIN USART1_Init 0 */
+  /* USER CODE BEGIN USART3_Init 0 */
 
-  /* USER CODE END USART1_Init 0 */
+  /* USER CODE END USART3_Init 0 */
 
-  /* USER CODE BEGIN USART1_Init 1 */
+  /* USER CODE BEGIN USART3_Init 1 */
 
-  /* USER CODE END USART1_Init 1 */
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_9B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_EVEN;
-  huart1.Init.Mode = UART_MODE_TX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
+  /* USER CODE END USART3_Init 1 */
+  huart3.Instance = USART3;
+  huart3.Init.BaudRate = 950000;
+  huart3.Init.WordLength = UART_WORDLENGTH_9B;
+  huart3.Init.StopBits = UART_STOPBITS_1;
+  huart3.Init.Parity = UART_PARITY_EVEN;
+  huart3.Init.Mode = UART_MODE_TX;
+  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart3.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart3) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART1_Init 2 */
+  /* USER CODE BEGIN USART3_Init 2 */
 
-  /* USER CODE END USART1_Init 2 */
+  /* USER CODE END USART3_Init 2 */
 
 }
 
@@ -364,18 +427,50 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, PIN_DEBUG_Pin|BUFF_PING_Pin|BUFF_PONG_Pin|DEBUG2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : PIN_DEBUG_Pin BUFF_PING_Pin BUFF_PONG_Pin DEBUG2_Pin */
-  GPIO_InitStruct.Pin = PIN_DEBUG_Pin|BUFF_PING_Pin|BUFF_PONG_Pin|DEBUG2_Pin;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(TIMER_INTERRUPT_GPIO_Port, TIMER_INTERRUPT_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(BUFFER_LLENO_GPIO_Port, BUFFER_LLENO_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : TIMER_INTERRUPT_Pin */
+  GPIO_InitStruct.Pin = TIMER_INTERRUPT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(TIMER_INTERRUPT_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : BOTON_Pin */
+  GPIO_InitStruct.Pin = BOTON_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(BOTON_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : BUFFER_LLENO_Pin */
+  GPIO_InitStruct.Pin = BUFFER_LLENO_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(BUFFER_LLENO_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -384,15 +479,36 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+
+	if(GPIO_Pin == BOTON_Pin){
+
+		evt = boton_presionado;
+		fsm(&estado, evt);
+		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	}
+}
+
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 {
 
 	if(htim->Instance == TIM2){
-		HAL_GPIO_TogglePin(GPIOA, PIN_DEBUG_Pin);
+		HAL_GPIO_TogglePin(GPIOA, TIMER_INTERRUPT_Pin);
 
-		if( ADC_Conversion() == 1 ){
+		switch(ADC_Conversion()){
+		case 1:
+			HAL_GPIO_WritePin(BUFFER_LLENO_GPIO_Port, BUFFER_LLENO_Pin, GPIO_PIN_SET);
 			evt = evt_buffer_lleno;
 			fsm(&estado, evt);
+			HAL_GPIO_WritePin(BUFFER_LLENO_GPIO_Port, BUFFER_LLENO_Pin, GPIO_PIN_RESET);
+			break;
+		case 2:
+			evt = trigger_disparado;
+			fsm(&estado, evt);
+			break;
+		default:
+			break;
 		}
 
 	}
@@ -403,12 +519,31 @@ uint8_t ADC_Conversion(){
 	HAL_ADC_Start(&hadc1);
 	if(HAL_ADC_PollForConversion(&hadc1, 0) == HAL_OK){
 
-		*puntero_escritura = (HAL_ADC_GetValue(&hadc1) >> 8);
-		*(puntero_escritura + 1) = HAL_ADC_GetValue(&hadc1) & 0XFF;
-		puntero_escritura = puntero_escritura + OFFSET;
+		*puntero_escritura = (HAL_ADC_GetValue(&hadc1)>>4) & 0XFF;
+		//*(puntero_escritura + 1) = HAL_ADC_GetValue(&hadc1) & 0XFF;
+
+		if( (flag == 1) && (*puntero_escritura >= trigger_valor)){
+
+			trigger_flag = 1;
+			flag = 0;
+		}
+
+		puntero_escritura = puntero_escritura + OFFSET;		//Se incrementa el puntero.
+
 	}
 
 	if(puntero_escritura >= posicion_final_puntero_escritura){
+
+		if(trigger_flag == 1){
+			trigger_contador++;
+
+			if(trigger_contador >= MAX_BUFFER_TRIGGER){
+				trigger_contador = 0;
+				trigger_flag = 0;
+				return 2;
+			}
+		}
+
 		return 1;
 	}
 	else{
@@ -430,21 +565,21 @@ void Swap_Buffer(uint8_t swap_condicion){
 void UART_TX_PING(){
 
 
-	HAL_GPIO_WritePin(GPIOA, BUFF_PING_Pin, GPIO_PIN_SET);
+	//HAL_GPIO_WritePin(GPIOA, BUFF_PING_Pin, GPIO_PIN_SET);
 
-	HAL_UART_Transmit(&huart1, bufferPING, sizeof(bufferPING), 10);
+	HAL_UART_Transmit(&huart3, bufferPING, sizeof(bufferPING), 10);
 
-	HAL_GPIO_WritePin(GPIOA, BUFF_PING_Pin, GPIO_PIN_RESET);
+	//HAL_GPIO_WritePin(GPIOA, BUFF_PING_Pin, GPIO_PIN_RESET);
 }
 
 
 void UART_TX_PONG(){
 
-	HAL_GPIO_WritePin(GPIOA, BUFF_PONG_Pin, GPIO_PIN_SET);
+	//HAL_GPIO_WritePin(GPIOA, BUFF_PONG_Pin, GPIO_PIN_SET);
 
-	HAL_UART_Transmit(&huart1, bufferPONG, sizeof(bufferPONG), 10);
+	HAL_UART_Transmit(&huart3, bufferPONG, sizeof(bufferPONG), 10);
 
-	HAL_GPIO_WritePin(GPIOA, BUFF_PONG_Pin, GPIO_PIN_RESET);
+	//HAL_GPIO_WritePin(GPIOA, BUFF_PONG_Pin, GPIO_PIN_RESET);
 }
 
 
@@ -454,7 +589,7 @@ void fsm(estados_t *estado, eventos_t eventos){
 
 	if(estado_anterior == INICIO){
 		switch(eventos){
-		case start_adc:
+		case boton_presionado:
 			*estado = GUARDANDO_EN_PING;
 			break;
 		default:
@@ -463,8 +598,14 @@ void fsm(estados_t *estado, eventos_t eventos){
 	}
 	if(estado_anterior == GUARDANDO_EN_PING){
 		switch(eventos){
+			case trigger_disparado:
+				*estado = PAUSA;
+				break;
 			case evt_buffer_lleno:
 				*estado = GUARDANDO_EN_PONG;
+				break;
+			/*case boton_presionado:
+				*estado = PAUSA;*/
 				break;
 			default:
 				break;
@@ -472,8 +613,20 @@ void fsm(estados_t *estado, eventos_t eventos){
 	}
 	if(estado_anterior == GUARDANDO_EN_PONG){
 		switch(eventos){
+			case trigger_disparado:
+				*estado = PAUSA;
+				break;
 			case evt_buffer_lleno:
 				*estado = GUARDANDO_EN_PING;
+				break;
+			default:
+				break;
+		}
+	}
+	if(estado_anterior == PAUSA){
+		switch(eventos){
+			case trigger_disparado:
+				*estado = INICIO;
 				break;
 			default:
 				break;
@@ -492,12 +645,28 @@ void fsm(estados_t *estado, eventos_t eventos){
 		case GUARDANDO_EN_PING:
 			Swap_Buffer(1);
 			UART_TX_PING_flag = 1;
+
+			if(*estado == PAUSA){
+				HAL_TIM_Base_Stop_IT(&htim2);
+				HAL_ADC_Stop(&hadc1);
+			}
+
 			break;
 		case GUARDANDO_EN_PONG:
 			Swap_Buffer(0);
 			UART_TX_PONG_flag = 1;
+
+			if(*estado == PAUSA){
+				HAL_TIM_Base_Stop_IT(&htim2);
+				HAL_ADC_Stop(&hadc1);
+			}
+
+			break;
+
+		default:
 			break;
 		}
+
 	}
 
 
