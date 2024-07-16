@@ -61,11 +61,17 @@ void Error_Handler(void);
 #define TIMER_INTERRUPT_GPIO_Port GPIOA
 #define ADC_TRIGGER_Pin GPIO_PIN_2
 #define ADC_TRIGGER_GPIO_Port GPIOA
+#define DEBUG_BUFFER_LLENO_Pin GPIO_PIN_3
+#define DEBUG_BUFFER_LLENO_GPIO_Port GPIOA
 #define BOTON_Pin GPIO_PIN_5
 #define BOTON_GPIO_Port GPIOA
 #define BOTON_EXTI_IRQn EXTI9_5_IRQn
-#define BUFFER_LLENO_Pin GPIO_PIN_0
-#define BUFFER_LLENO_GPIO_Port GPIOB
+#define CS_Pin GPIO_PIN_0
+#define CS_GPIO_Port GPIOB
+#define DC_Pin GPIO_PIN_1
+#define DC_GPIO_Port GPIOB
+#define RESET_Pin GPIO_PIN_6
+#define RESET_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

@@ -1,0 +1,15 @@
+../Core/Src/ST7735.c:89:6:ST7735_Select	1
+../Core/Src/ST7735.c:94:6:ST7735_Unselect	1
+../Core/Src/ST7735.c:99:6:ST7735_Reset	1
+../Core/Src/ST7735.c:106:8:ST7735_WriteCommand	1
+../Core/Src/ST7735.c:112:6:ST7735_WriteData	1
+../Core/Src/ST7735.c:118:6:DisplayInit	5
+../Core/Src/ST7735.c:145:6:ST7735_SetAddressWindow	1
+../Core/Src/ST7735.c:162:6:ST7735_Init	1
+../Core/Src/ST7735.c:191:6:ST7735_SetRotation	5
+../Core/Src/ST7735.c:251:6:ST7735_DrawPixel	3
+../Core/Src/ST7735.c:264:6:ST7735_WriteChar	4
+../Core/Src/ST7735.c:283:6:ST7735_WriteString	5
+../Core/Src/ST7735.c:309:6:ST7735_FillRectangle	7
+../Core/Src/ST7735.c:329:6:ST7735_DrawImage	5
+../Core/Src/ST7735.c:340:6:ST7735_InvertColors	2

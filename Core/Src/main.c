@@ -24,6 +24,12 @@
 
 #include "string.h"
 #include "stdio.h"
+#include "stdlib.h"
+
+
+#include "GFX_FUNCTIONS.h"
+#include "fonts.h"
+#include "ST7735.h"
 
 /* USER CODE END Includes */
 
@@ -43,7 +49,8 @@ typedef enum{
 	//start_adc,
 	boton_presionado,
 	evt_buffer_lleno,
-	trigger_disparado
+	trigger_disparado,
+	nulo
 
 }eventos_t;
 
@@ -71,6 +78,8 @@ typedef enum{
 ADC_HandleTypeDef hadc1;
 ADC_HandleTypeDef hadc2;
 
+SPI_HandleTypeDef hspi1;
+
 TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart3;
@@ -93,14 +102,20 @@ uint16_t debug;
 
 //Modificaciones 05/07
 
-uint16_t trigger_valor = 300;
+volatile uint8_t trigger_valor = 0;
 uint8_t trigger_flag = 0;
-uint8_t flag = 1;
 uint16_t trigger_contador = 0;
 
 #define MAX_BUFFER_TRIGGER 6
 
 
+//Modificaciones 16/07
+
+volatile uint8_t CONFIGURACION_flag = 1;
+
+
+#define MAX_X 160-1
+#define MAX_Y 128-1
 
 /* USER CODE END PV */
 
@@ -111,6 +126,7 @@ static void MX_ADC1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_ADC2_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 
 void UART_TX_PING();
@@ -161,6 +177,7 @@ int main(void)
   MX_TIM2_Init();
   MX_USART3_UART_Init();
   MX_ADC2_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -169,7 +186,22 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  //fsm(&estado, evt);
+  //La maquina de estados comienza desde el estado de configuracion, por tanto se inicializa el ADC que
+  //mide el potenciometro del trigger y la pantalla.
+
+
+  //Inicializacion de la pantalla.
+  ST7735_Init(0);
+  fillScreen(BLACK);
+  //testAll();
+
+  //Para almacenar en formato string el valor medido del trigger.
+  char value[4];
+  uint8_t valor_anterior;
+
+
+  ST7735_SetRotation(2);
+
 
   //bufferPING[0] = BYTE_START;
   //bufferPONG[0] = BYTE_START;
@@ -177,7 +209,6 @@ int main(void)
 
   while (1)
   {
-	  //debug = (*(puntero_escritura) <<8) + *(puntero_escritura+1);
 
 	  if(UART_TX_PING_flag == 1){
 
@@ -188,6 +219,23 @@ int main(void)
 
 		  UART_TX_PONG_flag = 0;
 		  UART_TX_PONG();
+	  }
+	  if(CONFIGURACION_flag == 1){
+			HAL_ADC_Start(&hadc2);
+			if(HAL_ADC_PollForConversion(&hadc2, 10) == HAL_OK){
+
+				trigger_valor = (HAL_ADC_GetValue(&hadc2)>>4) & 0XFF;
+			}
+
+
+			if(valor_anterior != trigger_valor){
+				fillScreen(WHITE);
+				itoa(trigger_valor, value, 10);
+				ST7735_WriteString(0, 0, value, Font_11x18, RED, BLACK);
+
+			}
+			valor_anterior = trigger_valor;
+			HAL_Delay(500);
 	  }
 
     /* USER CODE END WHILE */
@@ -338,6 +386,44 @@ static void MX_ADC2_Init(void)
 }
 
 /**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_1LINE;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
   * @brief TIM2 Initialization Function
   * @param None
   * @retval None
@@ -436,10 +522,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(TIMER_INTERRUPT_GPIO_Port, TIMER_INTERRUPT_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, TIMER_INTERRUPT_Pin|DEBUG_BUFFER_LLENO_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(BUFFER_LLENO_GPIO_Port, BUFFER_LLENO_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, CS_Pin|DC_Pin|RESET_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
@@ -448,12 +534,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : TIMER_INTERRUPT_Pin */
-  GPIO_InitStruct.Pin = TIMER_INTERRUPT_Pin;
+  /*Configure GPIO pins : TIMER_INTERRUPT_Pin DEBUG_BUFFER_LLENO_Pin */
+  GPIO_InitStruct.Pin = TIMER_INTERRUPT_Pin|DEBUG_BUFFER_LLENO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(TIMER_INTERRUPT_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : BOTON_Pin */
   GPIO_InitStruct.Pin = BOTON_Pin;
@@ -461,12 +547,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(BOTON_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : BUFFER_LLENO_Pin */
-  GPIO_InitStruct.Pin = BUFFER_LLENO_Pin;
+  /*Configure GPIO pins : CS_Pin DC_Pin RESET_Pin */
+  GPIO_InitStruct.Pin = CS_Pin|DC_Pin|RESET_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(BUFFER_LLENO_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
@@ -498,10 +584,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 
 		switch(ADC_Conversion()){
 		case 1:
-			HAL_GPIO_WritePin(BUFFER_LLENO_GPIO_Port, BUFFER_LLENO_Pin, GPIO_PIN_SET);
+			HAL_GPIO_WritePin(DEBUG_BUFFER_LLENO_GPIO_Port, DEBUG_BUFFER_LLENO_Pin, GPIO_PIN_SET);
 			evt = evt_buffer_lleno;
 			fsm(&estado, evt);
-			HAL_GPIO_WritePin(BUFFER_LLENO_GPIO_Port, BUFFER_LLENO_Pin, GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(DEBUG_BUFFER_LLENO_GPIO_Port, DEBUG_BUFFER_LLENO_Pin, GPIO_PIN_RESET);
 			break;
 		case 2:
 			evt = trigger_disparado;
@@ -522,32 +608,41 @@ uint8_t ADC_Conversion(){
 		*puntero_escritura = (HAL_ADC_GetValue(&hadc1)>>4) & 0XFF;
 		//*(puntero_escritura + 1) = HAL_ADC_GetValue(&hadc1) & 0XFF;
 
-		if( (flag == 1) && (*puntero_escritura >= trigger_valor)){
+		//if( (flag == 1) && (*puntero_escritura >= trigger_valor)){
+		if( *puntero_escritura >= trigger_valor){
 
 			trigger_flag = 1;
-			flag = 0;
+			//flag = 0;
 		}
 
 		puntero_escritura = puntero_escritura + OFFSET;		//Se incrementa el puntero.
 
-	}
 
-	if(puntero_escritura >= posicion_final_puntero_escritura){
 
-		if(trigger_flag == 1){
-			trigger_contador++;
+		if(puntero_escritura >= posicion_final_puntero_escritura){
 
-			if(trigger_contador >= MAX_BUFFER_TRIGGER){
-				trigger_contador = 0;
-				trigger_flag = 0;
-				return 2;
+			if(trigger_flag == 1){
+				trigger_contador++;
+
+				if(trigger_contador >= MAX_BUFFER_TRIGGER){
+					trigger_contador = 0;
+					trigger_flag = 0;
+					return 2;
+				}
 			}
+
+			return 1;
+		}
+		else{
+			return 0;
 		}
 
-		return 1;
 	}
+
+
+
 	else{
-		return 0;
+		return -1;
 	}
 }
 
@@ -625,7 +720,7 @@ void fsm(estados_t *estado, eventos_t eventos){
 	}
 	if(estado_anterior == PAUSA){
 		switch(eventos){
-			case trigger_disparado:
+			case boton_presionado:
 				*estado = INICIO;
 				break;
 			default:
@@ -638,6 +733,10 @@ void fsm(estados_t *estado, eventos_t eventos){
 	if(estado_anterior != *estado){
 		switch(estado_anterior){
 		case INICIO:
+			//Ya no me encuentro en el estado de configuracion, pongo el flag en 0.
+			CONFIGURACION_flag = 0;
+			HAL_ADC_Stop(&hadc2);		//Detengo el ADC que mide el potenciometro para el valor del trigger.
+
 			Swap_Buffer(0);
 			HAL_TIM_Base_Start_IT(&htim2);
 			HAL_ADC_Start(&hadc1);
@@ -661,6 +760,10 @@ void fsm(estados_t *estado, eventos_t eventos){
 				HAL_ADC_Stop(&hadc1);
 			}
 
+			break;
+		case PAUSA:
+			CONFIGURACION_flag = 1;
+			HAL_ADC_Start(&hadc2);		//Inicio el ADC del pot. del trigger.
 			break;
 
 		default:
