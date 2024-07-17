@@ -37,7 +37,15 @@
 /* USER CODE BEGIN PTD */
 
 typedef enum{
-	INICIO,
+	START,
+	C_RESOLUCION,
+	C_RESOLUCION_8bit,
+	C_RESOLUCION_12bit,
+	C_TRIGGER,
+	C_TRIGGER_SET,
+	C_MUESTRAS,
+	C_MUESTRAS_500,
+	C_MUESTRAS_1000,
 	GUARDANDO_EN_PING,
 	GUARDANDO_EN_PONG,
 	PAUSA
@@ -47,10 +55,11 @@ typedef enum{
 typedef enum{
 
 	//start_adc,
-	boton_presionado,
+	boton_OK,
+	boton_FLECHA,
+	boton_ESC,
 	evt_buffer_lleno,
-	trigger_disparado,
-	nulo
+	trigger_disparado
 
 }eventos_t;
 
@@ -111,11 +120,13 @@ uint16_t trigger_contador = 0;
 
 //Modificaciones 16/07
 
-volatile uint8_t CONFIGURACION_flag = 1;
+volatile uint8_t TRIGGER_flag = 0;
 
 
-#define MAX_X 160-1
-#define MAX_Y 128-1
+#define MAX_Y 160-1
+#define MAX_X 128-1
+
+#define color(r, g, b) ((r << 11) | (g  << 5) | ( b))
 
 /* USER CODE END PV */
 
@@ -135,11 +146,18 @@ uint8_t ADC_Conversion();
 void fsm(estados_t *estado, eventos_t eventos);
 void Swap_Buffer(uint8_t swap_condicion);
 
+
+//
+void plotConfig();
+void plotResolucion();
+void plotTrigger();
+void plotMuestras();
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-estados_t estado = INICIO;
+estados_t estado = START;
 eventos_t evt = evt_buffer_lleno;
 
 /* USER CODE END 0 */
@@ -191,17 +209,16 @@ int main(void)
 
 
   //Inicializacion de la pantalla.
-  ST7735_Init(0);
+  ST7735_Init(2);
   fillScreen(BLACK);
+  ST7735_SetRotation(2);
   //testAll();
+
+  plotConfig();
 
   //Para almacenar en formato string el valor medido del trigger.
   char value[4];
   uint8_t valor_anterior;
-
-
-  ST7735_SetRotation(2);
-
 
   //bufferPING[0] = BYTE_START;
   //bufferPONG[0] = BYTE_START;
@@ -220,7 +237,7 @@ int main(void)
 		  UART_TX_PONG_flag = 0;
 		  UART_TX_PONG();
 	  }
-	  if(CONFIGURACION_flag == 1){
+	  if(TRIGGER_flag == 1){
 			HAL_ADC_Start(&hadc2);
 			if(HAL_ADC_PollForConversion(&hadc2, 10) == HAL_OK){
 
@@ -229,9 +246,10 @@ int main(void)
 
 
 			if(valor_anterior != trigger_valor){
-				fillScreen(WHITE);
+				//fillScreen(WHITE);
+				fillRect(50, 50, 10, 10, BLACK);
 				itoa(trigger_valor, value, 10);
-				ST7735_WriteString(0, 0, value, Font_11x18, RED, BLACK);
+				ST7735_WriteString(50, 50, value, Font_11x18, RED, BLACK);
 
 			}
 			valor_anterior = trigger_valor;
@@ -541,11 +559,11 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : BOTON_Pin */
-  GPIO_InitStruct.Pin = BOTON_Pin;
+  /*Configure GPIO pins : BOTON_OK_Pin BOTON_FLECHA_Pin BOTON_ESC_Pin */
+  GPIO_InitStruct.Pin = BOTON_OK_Pin|BOTON_FLECHA_Pin|BOTON_ESC_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(BOTON_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : CS_Pin DC_Pin RESET_Pin */
   GPIO_InitStruct.Pin = CS_Pin|DC_Pin|RESET_Pin;
@@ -564,12 +582,70 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void plotConfig(){
+
+	  drawRoundRect(0, 0, MAX_X, MAX_Y, 10, BLUE);
+	  fillCircle( 21, 75, 5, BLUE);
+
+	  ST7735_WriteString(15, 10, "OSCILOSCOPIO", Font_7x10, RED, BLACK);
+	  ST7735_WriteString(15, 25, "CONFIGURACION", Font_7x10, RED, BLACK);
+
+
+	  ST7735_WriteString(35, 70, "Start", Font_7x10, RED, YELLOW);
+	  ST7735_WriteString(35, 90, "Resolucion", Font_7x10, RED, YELLOW);
+	  ST7735_WriteString(35, 110, "Trigger", Font_7x10, RED, YELLOW);
+	  ST7735_WriteString(35, 130, "Muestras", Font_7x10, RED, YELLOW);
+}
+
+void plotResolucion(){
+
+	fillScreen(BLACK);
+	ST7735_WriteString(10, 10, "CONFIGURACION", Font_7x10, RED, BLACK);
+	ST7735_WriteString(10, 25, "DE LA RESOLUCION", Font_7x10, RED, BLACK);
+
+	ST7735_WriteString(50, 70, "8 bits", Font_7x10, RED, BLACK);
+	ST7735_WriteString(50, 90, "12 bits", Font_7x10, RED, BLACK);
+
+	fillCircle(35, 74, 5, BLUE);
+
+}
+
+void plotTrigger(){
+
+	fillScreen(BLACK);
+	ST7735_WriteString(15, 10, "CONFIGURACION", Font_7x10, RED, BLACK);
+	ST7735_WriteString(15, 25, "TRIGGER", Font_7x10, RED, BLACK);
+
+}
+
+void plotMuestras(){
+
+	fillScreen(BLACK);
+	ST7735_WriteString(15, 10, "CONFIGURACION", Font_7x10, RED, BLACK);
+	ST7735_WriteString(15, 25, "MUESTRAS", Font_7x10, RED, BLACK);
+
+}
+
+
+
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
-	if(GPIO_Pin == BOTON_Pin){
+	if(GPIO_Pin == BOTON_OK_Pin){
 
-		evt = boton_presionado;
+		evt = boton_OK;
+		fsm(&estado, evt);
+		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	}
+	if(GPIO_Pin == BOTON_FLECHA_Pin){
+
+		evt = boton_FLECHA;
+		fsm(&estado, evt);
+		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+	}
+	if(GPIO_Pin == BOTON_ESC_Pin){
+
+		evt = boton_ESC;
 		fsm(&estado, evt);
 		//HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
 	}
@@ -605,14 +681,18 @@ uint8_t ADC_Conversion(){
 	HAL_ADC_Start(&hadc1);
 	if(HAL_ADC_PollForConversion(&hadc1, 0) == HAL_OK){
 
-		*puntero_escritura = (HAL_ADC_GetValue(&hadc1)>>4) & 0XFF;
-		//*(puntero_escritura + 1) = HAL_ADC_GetValue(&hadc1) & 0XFF;
+		if(OFFSET == 1){
+			*puntero_escritura = (HAL_ADC_GetValue(&hadc1)>>4) & 0XFF;
+		}
+		else{	//OFFSET = 2
+			*puntero_escritura = (HAL_ADC_GetValue(&hadc1)>>8)	& 0X0F;
+			*(puntero_escritura + 1) = HAL_ADC_GetValue(&hadc1) & 0XFF;
+		}
 
-		//if( (flag == 1) && (*puntero_escritura >= trigger_valor)){
+
 		if( *puntero_escritura >= trigger_valor){
 
 			trigger_flag = 1;
-			//flag = 0;
 		}
 
 		puntero_escritura = puntero_escritura + OFFSET;		//Se incrementa el puntero.
@@ -682,16 +762,19 @@ void fsm(estados_t *estado, eventos_t eventos){
 
 	estados_t estado_anterior = *estado;
 
-	if(estado_anterior == INICIO){
+	if(estado_anterior == START){
 		switch(eventos){
-		case boton_presionado:
+		case boton_OK:
 			*estado = GUARDANDO_EN_PING;
+			break;
+		case boton_FLECHA:
+			*estado = C_RESOLUCION;
 			break;
 		default:
 			break;
 			}
 	}
-	if(estado_anterior == GUARDANDO_EN_PING){
+	else if(estado_anterior == GUARDANDO_EN_PING){
 		switch(eventos){
 			case trigger_disparado:
 				*estado = PAUSA;
@@ -699,14 +782,14 @@ void fsm(estados_t *estado, eventos_t eventos){
 			case evt_buffer_lleno:
 				*estado = GUARDANDO_EN_PONG;
 				break;
-			/*case boton_presionado:
+			/*case boton_OK:
 				*estado = PAUSA;*/
 				break;
 			default:
 				break;
 			}
 	}
-	if(estado_anterior == GUARDANDO_EN_PONG){
+	else  if(estado_anterior == GUARDANDO_EN_PONG){
 		switch(eventos){
 			case trigger_disparado:
 				*estado = PAUSA;
@@ -718,10 +801,103 @@ void fsm(estados_t *estado, eventos_t eventos){
 				break;
 		}
 	}
-	if(estado_anterior == PAUSA){
+	else if(estado_anterior == PAUSA){
 		switch(eventos){
-			case boton_presionado:
-				*estado = INICIO;
+			case boton_OK:
+				*estado = START;
+				break;
+			default:
+				break;
+		}
+	}
+	else if(estado_anterior == C_RESOLUCION){
+		switch(eventos){
+			case boton_OK:
+				*estado = C_RESOLUCION_8bit;
+				break;
+			case boton_FLECHA:
+				*estado = C_TRIGGER;
+				break;
+			default:
+				break;
+		}
+	}
+	else if(estado_anterior == C_RESOLUCION_8bit){
+		switch(eventos){
+			case boton_ESC:
+				*estado = C_RESOLUCION;
+				break;
+			case boton_FLECHA:
+				*estado = C_RESOLUCION_12bit;
+				break;
+			default:
+				break;
+		}
+	}
+	else if(estado_anterior == C_RESOLUCION_12bit){
+		switch(eventos){
+			case boton_ESC:
+				*estado = C_RESOLUCION;
+				break;
+			case boton_FLECHA:
+				*estado = C_RESOLUCION_8bit;
+				break;
+			default:
+				break;
+		}
+	}
+	else if(estado_anterior == C_TRIGGER){
+		switch(eventos){
+			case boton_OK:
+				*estado = C_TRIGGER_SET;
+				break;
+			case boton_FLECHA:
+				*estado = C_MUESTRAS;
+				break;
+			default:
+				break;
+		}
+	}
+	else if(estado_anterior == C_TRIGGER_SET){
+		switch(eventos){
+			case boton_OK:
+				*estado = C_TRIGGER;
+				break;
+			default:
+				break;
+		}
+	}
+	else if(estado_anterior == C_MUESTRAS){
+		switch(eventos){
+			case boton_OK:
+				*estado = C_MUESTRAS_500;
+				break;
+			case boton_FLECHA:
+				*estado = START;
+				break;
+			default:
+				break;
+		}
+	}
+	else if(estado_anterior == C_MUESTRAS_500){
+		switch(eventos){
+			case boton_ESC:
+				*estado = C_MUESTRAS;
+				break;
+			case boton_FLECHA:
+				*estado = C_MUESTRAS_1000;
+				break;
+			default:
+				break;
+		}
+	}
+	else if(estado_anterior == C_MUESTRAS_1000){
+		switch(eventos){
+			case boton_ESC:
+				*estado = C_MUESTRAS;
+				break;
+			case boton_FLECHA:
+				*estado = C_MUESTRAS_500;
 				break;
 			default:
 				break;
@@ -732,14 +908,22 @@ void fsm(estados_t *estado, eventos_t eventos){
 
 	if(estado_anterior != *estado){
 		switch(estado_anterior){
-		case INICIO:
-			//Ya no me encuentro en el estado de configuracion, pongo el flag en 0.
-			CONFIGURACION_flag = 0;
-			HAL_ADC_Stop(&hadc2);		//Detengo el ADC que mide el potenciometro para el valor del trigger.
+		case START:
 
-			Swap_Buffer(0);
-			HAL_TIM_Base_Start_IT(&htim2);
-			HAL_ADC_Start(&hadc1);
+			if(*estado == GUARDANDO_EN_PING){
+				//Ya no me encuentro en el estado de configuracion, pongo el flag en 0.
+				TRIGGER_flag = 0;
+				HAL_ADC_Stop(&hadc2);		//Detengo el ADC que mide el potenciometro para el valor del trigger.
+
+				Swap_Buffer(0);
+				HAL_TIM_Base_Start_IT(&htim2);
+				HAL_ADC_Start(&hadc1);
+			}
+			else{	//Ahora estoy en el estado Resolucion
+				fillCircle( 21, 75, 5, BLACK);
+				fillCircle( 21, 94, 5, BLUE);
+			}
+
 			break;
 		case GUARDANDO_EN_PING:
 			Swap_Buffer(1);
@@ -762,8 +946,58 @@ void fsm(estados_t *estado, eventos_t eventos){
 
 			break;
 		case PAUSA:
-			CONFIGURACION_flag = 1;
-			HAL_ADC_Start(&hadc2);		//Inicio el ADC del pot. del trigger.
+			TRIGGER_flag = 1;
+			HAL_ADC_Start(&hadc2);		//START el ADC del pot. del trigger.
+			break;
+
+		case C_RESOLUCION:
+
+			if(*estado == C_TRIGGER){
+				fillCircle( 21, 94, 5, BLACK);
+				fillCircle( 21, 115, 5, BLUE);
+			}
+			else{	//Ahora estoy en el estado resolucion 8bit.
+				fillScreen(BLACK);
+				plotResolucion();
+
+			}
+			break;
+		case C_RESOLUCION_8bit:
+			if(*estado == C_RESOLUCION_12bit){
+				fillCircle(35, 74, 5, BLACK);
+				fillCircle(35, 94, 5, BLUE);
+			}
+			else{
+				fillScreen(BLACK);
+				plotConfig();
+			}
+			break;
+		case C_RESOLUCION_12bit:
+			if(*estado == C_RESOLUCION_8bit){
+				fillCircle(35, 94, 5, BLACK);
+				fillCircle(35, 74, 5, BLUE);
+			}
+			else{
+				plotConfig();
+			}
+			break;
+		case C_TRIGGER:
+			if(*estado == C_MUESTRAS){
+				fillCircle( 21, 115, 5, BLACK);
+				fillCircle( 21, 134, 5, BLUE);
+			}
+			else{	//Ahora estoy en el estado trigger set.
+				plotTrigger();
+			}
+			break;
+		case C_MUESTRAS:
+			if(*estado == START){
+				fillCircle( 21, 134, 5, BLACK);
+				fillCircle( 21, 75, 5, BLUE);
+			}
+			else{	//Ahora estoy en el estado muestras 500.
+				plotMuestras();
+			}
 			break;
 
 		default:
