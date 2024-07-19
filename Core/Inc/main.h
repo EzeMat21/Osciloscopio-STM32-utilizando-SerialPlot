@@ -57,8 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define TIMER_INTERRUPT_Pin GPIO_PIN_1
-#define TIMER_INTERRUPT_GPIO_Port GPIOA
+#define DEBUG_TIMER_INTERRUPT_Pin GPIO_PIN_1
+#define DEBUG_TIMER_INTERRUPT_GPIO_Port GPIOA
 #define ADC_TRIGGER_Pin GPIO_PIN_2
 #define ADC_TRIGGER_GPIO_Port GPIOA
 #define DEBUG_BUFFER_LLENO_Pin GPIO_PIN_3
@@ -78,6 +78,8 @@ void Error_Handler(void);
 #define DC_GPIO_Port GPIOB
 #define RESET_Pin GPIO_PIN_6
 #define RESET_GPIO_Port GPIOB
+#define DEBUG_ADC1_Pin GPIO_PIN_7
+#define DEBUG_ADC1_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

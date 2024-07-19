@@ -37,24 +37,26 @@
 /* USER CODE BEGIN PTD */
 
 typedef enum{
-	START,
+	INICIO,
 	C_RESOLUCION,
 	C_RESOLUCION_8bit,
 	C_RESOLUCION_12bit,
 	C_TRIGGER,
-	C_TRIGGER_SET,
+	C_TRIGGER_ASC,
+	C_TRIGGER_DESC,
 	C_MUESTRAS,
 	C_MUESTRAS_500,
 	C_MUESTRAS_1000,
 	GUARDANDO_EN_PING,
 	GUARDANDO_EN_PONG,
-	PAUSA
+	PAUSA,
+	TRIGGER_TERMINADO
 
 }estados_t;
 
 typedef enum{
 
-	//start_adc,
+	//INICIO_adc,
 	boton_OK,
 	boton_FLECHA,
 	boton_ESC,
@@ -64,17 +66,33 @@ typedef enum{
 }eventos_t;
 
 
-#define OFFSET 1
-#define BYTE_START 0xAA
-
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 
-#define MAX 25
 #define TAMANO 100
+
+#define MAX_Y 160-1
+#define MAX_X 128-1
+
+#define color(r, g, b) ((r << 11) | (g  << 5) | ( b))
+
+
+uint16_t operacion_95(uint16_t x){
+
+	//uint16_t temp = (x >> 5) + (x >> 6);
+	uint16_t temp = x>>4;
+    return x - temp;
+}
+
+uint16_t operacion_105(uint16_t x){
+
+	//uint16_t temp = (x >> 5) + (x >> 6);
+	uint16_t temp = x>>4;
+    return x + temp;
+}
+
 
 /* USER CODE END PD */
 
@@ -111,22 +129,20 @@ uint16_t debug;
 
 //Modificaciones 05/07
 
-volatile uint8_t trigger_valor = 0;
-uint8_t trigger_flag = 0;
-uint16_t trigger_contador = 0;
+volatile uint16_t trigger_valor = 127;
+volatile uint8_t trigger_flag = 1;
+volatile uint8_t trigger_activado = 0;
+volatile uint16_t trigger_contador = 0;
+volatile uint8_t max_buff_trigger = 6;
 
-#define MAX_BUFFER_TRIGGER 6
+volatile uint8_t trigger_en_condiciones = 0;
 
+volatile uint8_t ADC_TRIGGER_flag = 0;
+volatile uint8_t OFFSET = 1;			//Si el offset es 1 entonces estamos en resol de 8bits, si es 2 entonces estamos en resol. de 12bits.
+volatile uint8_t flanco = 0;
 
-//Modificaciones 16/07
+volatile uint8_t muestras = 0;
 
-volatile uint8_t TRIGGER_flag = 0;
-
-
-#define MAX_Y 160-1
-#define MAX_X 128-1
-
-#define color(r, g, b) ((r << 11) | (g  << 5) | ( b))
 
 /* USER CODE END PV */
 
@@ -147,17 +163,16 @@ void fsm(estados_t *estado, eventos_t eventos);
 void Swap_Buffer(uint8_t swap_condicion);
 
 
-//
 void plotConfig();
 void plotResolucion();
 void plotTrigger();
 void plotMuestras();
-
+void plotInicio();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-estados_t estado = START;
+estados_t estado = INICIO;
 eventos_t evt = evt_buffer_lleno;
 
 /* USER CODE END 0 */
@@ -210,18 +225,13 @@ int main(void)
 
   //Inicializacion de la pantalla.
   ST7735_Init(2);
-  fillScreen(BLACK);
   ST7735_SetRotation(2);
-  //testAll();
-
   plotConfig();
+  fillCircle( 21, 75, 5, BLUE);
 
   //Para almacenar en formato string el valor medido del trigger.
   char value[4];
-  uint8_t valor_anterior;
-
-  //bufferPING[0] = BYTE_START;
-  //bufferPONG[0] = BYTE_START;
+  uint16_t valor_anterior = 0;
 
 
   while (1)
@@ -237,23 +247,31 @@ int main(void)
 		  UART_TX_PONG_flag = 0;
 		  UART_TX_PONG();
 	  }
-	  if(TRIGGER_flag == 1){
+	  if(ADC_TRIGGER_flag == 1){
+
 			HAL_ADC_Start(&hadc2);
-			if(HAL_ADC_PollForConversion(&hadc2, 10) == HAL_OK){
+			if(HAL_ADC_PollForConversion(&hadc2, 50) == HAL_OK){
 
-				trigger_valor = (HAL_ADC_GetValue(&hadc2)>>4) & 0XFF;
+
+				if(OFFSET == 1){
+					trigger_valor = (HAL_ADC_GetValue(&hadc2)>>4) & 0XFF;
+				}
+				else{
+					trigger_valor = HAL_ADC_GetValue(&hadc2) & 0XFFF;
+				}
+
+
+				if(valor_anterior != trigger_valor){
+
+					fillRect(45, 50, 45, 15, BLACK);
+					itoa(trigger_valor, value, 10);
+					ST7735_WriteString(45, 50, value, Font_11x18, color(31,44,0), BLACK);
+
+				}
+
+				valor_anterior = trigger_valor;
+				HAL_Delay(300);
 			}
-
-
-			if(valor_anterior != trigger_valor){
-				//fillScreen(WHITE);
-				fillRect(50, 50, 10, 10, BLACK);
-				itoa(trigger_valor, value, 10);
-				ST7735_WriteString(50, 50, value, Font_11x18, RED, BLACK);
-
-			}
-			valor_anterior = trigger_valor;
-			HAL_Delay(500);
 	  }
 
     /* USER CODE END WHILE */
@@ -462,7 +480,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 72-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 16-1;
+  htim2.Init.Period = 20-1;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -540,10 +558,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, TIMER_INTERRUPT_Pin|DEBUG_BUFFER_LLENO_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, DEBUG_TIMER_INTERRUPT_Pin|DEBUG_BUFFER_LLENO_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, CS_Pin|DC_Pin|RESET_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, CS_Pin|DC_Pin|RESET_Pin|DEBUG_ADC1_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : PC13 */
   GPIO_InitStruct.Pin = GPIO_PIN_13;
@@ -552,8 +570,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : TIMER_INTERRUPT_Pin DEBUG_BUFFER_LLENO_Pin */
-  GPIO_InitStruct.Pin = TIMER_INTERRUPT_Pin|DEBUG_BUFFER_LLENO_Pin;
+  /*Configure GPIO pins : DEBUG_TIMER_INTERRUPT_Pin DEBUG_BUFFER_LLENO_Pin */
+  GPIO_InitStruct.Pin = DEBUG_TIMER_INTERRUPT_Pin|DEBUG_BUFFER_LLENO_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -565,8 +583,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : CS_Pin DC_Pin RESET_Pin */
-  GPIO_InitStruct.Pin = CS_Pin|DC_Pin|RESET_Pin;
+  /*Configure GPIO pins : CS_Pin DC_Pin RESET_Pin DEBUG_ADC1_Pin */
+  GPIO_InitStruct.Pin = CS_Pin|DC_Pin|RESET_Pin|DEBUG_ADC1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -584,49 +602,66 @@ static void MX_GPIO_Init(void)
 
 void plotConfig(){
 
+	  fillScreen(BLACK);
 	  drawRoundRect(0, 0, MAX_X, MAX_Y, 10, BLUE);
-	  fillCircle( 21, 75, 5, BLUE);
-
-	  ST7735_WriteString(15, 10, "OSCILOSCOPIO", Font_7x10, RED, BLACK);
-	  ST7735_WriteString(15, 25, "CONFIGURACION", Font_7x10, RED, BLACK);
 
 
-	  ST7735_WriteString(35, 70, "Start", Font_7x10, RED, YELLOW);
+	  ST7735_WriteString(18, 10, "OSCILOSCOPIO", Font_7x10, WHITE, BLACK);
+	  ST7735_WriteString(18, 25, "CONFIGURACION", Font_7x10, WHITE, BLACK);
+
+
+	  ST7735_WriteString(35, 70, "Inicio", Font_7x10, RED, YELLOW);
 	  ST7735_WriteString(35, 90, "Resolucion", Font_7x10, RED, YELLOW);
 	  ST7735_WriteString(35, 110, "Trigger", Font_7x10, RED, YELLOW);
 	  ST7735_WriteString(35, 130, "Muestras", Font_7x10, RED, YELLOW);
 }
 
+void plotInicio(){
+
+	  fillScreen(BLACK);
+	  drawRoundRect(0, 0, MAX_X, MAX_Y, 10, color(3,47,3));
+
+	  ST7735_WriteString(40, 40, "MODO: ", Font_11x18, WHITE, BLACK);
+	  ST7735_WriteString(20, 80, "Transmitiendo", Font_7x10, GREEN, BLACK);
+}
+
 void plotResolucion(){
 
 	fillScreen(BLACK);
-	ST7735_WriteString(10, 10, "CONFIGURACION", Font_7x10, RED, BLACK);
-	ST7735_WriteString(10, 25, "DE LA RESOLUCION", Font_7x10, RED, BLACK);
+	drawRoundRect(0, 0, MAX_X, MAX_Y, 10, color(4,47,25));
+	ST7735_WriteString(10, 10, "Configuracion", Font_7x10, WHITE, BLACK);
+	ST7735_WriteString(10, 25, "de la Resolucion", Font_7x10, WHITE, BLACK);
 
-	ST7735_WriteString(50, 70, "8 bits", Font_7x10, RED, BLACK);
-	ST7735_WriteString(50, 90, "12 bits", Font_7x10, RED, BLACK);
-
-	fillCircle(35, 74, 5, BLUE);
+	ST7735_WriteString(50, 70, "8 bits", Font_7x10, WHITE, BLACK);
+	ST7735_WriteString(50, 90, "12 bits", Font_7x10, WHITE, BLACK);
 
 }
 
 void plotTrigger(){
 
 	fillScreen(BLACK);
-	ST7735_WriteString(15, 10, "CONFIGURACION", Font_7x10, RED, BLACK);
-	ST7735_WriteString(15, 25, "TRIGGER", Font_7x10, RED, BLACK);
+	drawRoundRect(0, 0, MAX_X, MAX_Y, 10, color(26,34,31));
+	ST7735_WriteString(15, 10, "Configuracion", Font_7x10, WHITE, BLACK);
+	ST7735_WriteString(15, 25, "del Trigger", Font_7x10, WHITE, BLACK);
+
+
+	ST7735_WriteString(35, 100, "Ascendente", Font_7x10, WHITE, BLACK);
+	ST7735_WriteString(35, 120, "Descendente", Font_7x10, WHITE, BLACK);
 
 }
 
 void plotMuestras(){
 
 	fillScreen(BLACK);
-	ST7735_WriteString(15, 10, "CONFIGURACION", Font_7x10, RED, BLACK);
-	ST7735_WriteString(15, 25, "MUESTRAS", Font_7x10, RED, BLACK);
+	drawRoundRect(0, 0, MAX_X, MAX_Y, 10, color(0,58,31));
+	ST7735_WriteString(15, 10, "Configuracion", Font_7x10, WHITE, BLACK);
+	ST7735_WriteString(15, 25, "de las muestras", Font_7x10, WHITE, BLACK);
+
+
+	ST7735_WriteString(35, 80, "500 muestras", Font_7x10, WHITE, BLACK);
+	ST7735_WriteString(35, 100, "1000 muestras", Font_7x10, WHITE, BLACK);
 
 }
-
-
 
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
@@ -656,7 +691,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 {
 
 	if(htim->Instance == TIM2){
-		HAL_GPIO_TogglePin(GPIOA, TIMER_INTERRUPT_Pin);
+		HAL_GPIO_TogglePin(GPIOA, DEBUG_TIMER_INTERRUPT_Pin);
 
 		switch(ADC_Conversion()){
 		case 1:
@@ -678,21 +713,39 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 }
 
 uint8_t ADC_Conversion(){
+
+
+	uint16_t valor_medido = 0;
+
 	HAL_ADC_Start(&hadc1);
 	if(HAL_ADC_PollForConversion(&hadc1, 0) == HAL_OK){
 
+		HAL_GPIO_WritePin(GPIOB, DEBUG_ADC1_Pin, GPIO_PIN_SET);
+
 		if(OFFSET == 1){
 			*puntero_escritura = (HAL_ADC_GetValue(&hadc1)>>4) & 0XFF;
+
+			valor_medido = *puntero_escritura;
 		}
 		else{	//OFFSET = 2
-			*puntero_escritura = (HAL_ADC_GetValue(&hadc1)>>8)	& 0X0F;
+			*puntero_escritura = (HAL_ADC_GetValue(&hadc1)>>8) & 0X0F;
 			*(puntero_escritura + 1) = HAL_ADC_GetValue(&hadc1) & 0XFF;
+
+			valor_medido = ((*puntero_escritura)<<8) + *(puntero_escritura+1);
 		}
 
 
-		if( *puntero_escritura >= trigger_valor){
+		if( (trigger_flag == 1) && (( (valor_medido< operacion_95(trigger_valor)) && flanco == 0) ||  ((valor_medido> operacion_105(trigger_valor)) && flanco == 1))){
+		//if( (trigger_flag == 1) && (( (valor_medido< trigger_valor) && flanco == 0) ||  ((valor_medido> trigger_valor) && flanco == 1))){
+			trigger_en_condiciones = 1;
+			trigger_flag = 0;
+		}
 
-			trigger_flag = 1;
+		//if( *puntero_escritura > trigger_valor){
+		if( (trigger_en_condiciones == 1) &&  ((valor_medido> operacion_105(trigger_valor) && flanco == 0) ||  (valor_medido<operacion_95(trigger_valor) && flanco == 1)) ){
+		//if( (trigger_en_condiciones == 1) &&  ((valor_medido> trigger_valor && flanco == 0) ||  (valor_medido<trigger_valor && flanco == 1)) ){
+			trigger_activado = 1;	//Para avisar que luego de un n numero de muestras el ADC se corta.
+			trigger_en_condiciones = 0;
 		}
 
 		puntero_escritura = puntero_escritura + OFFSET;		//Se incrementa el puntero.
@@ -701,21 +754,29 @@ uint8_t ADC_Conversion(){
 
 		if(puntero_escritura >= posicion_final_puntero_escritura){
 
-			if(trigger_flag == 1){
+			if(trigger_activado == 1){
 				trigger_contador++;
 
-				if(trigger_contador >= MAX_BUFFER_TRIGGER){
+				if(trigger_contador >= max_buff_trigger){
 					trigger_contador = 0;
-					trigger_flag = 0;
+					trigger_activado = 0;
+					trigger_flag = 1;
+
+					HAL_GPIO_WritePin(GPIOB, DEBUG_ADC1_Pin, GPIO_PIN_RESET);
+
 					return 2;
 				}
 			}
 
+			HAL_GPIO_WritePin(GPIOB, DEBUG_ADC1_Pin, GPIO_PIN_RESET);
 			return 1;
 		}
 		else{
+			HAL_GPIO_WritePin(GPIOB, DEBUG_ADC1_Pin, GPIO_PIN_RESET);
 			return 0;
 		}
+
+
 
 	}
 
@@ -742,7 +803,7 @@ void UART_TX_PING(){
 
 	//HAL_GPIO_WritePin(GPIOA, BUFF_PING_Pin, GPIO_PIN_SET);
 
-	HAL_UART_Transmit(&huart3, bufferPING, sizeof(bufferPING), 10);
+	HAL_UART_Transmit(&huart3, bufferPING, sizeof(bufferPING), 15);
 
 	//HAL_GPIO_WritePin(GPIOA, BUFF_PING_Pin, GPIO_PIN_RESET);
 }
@@ -752,7 +813,7 @@ void UART_TX_PONG(){
 
 	//HAL_GPIO_WritePin(GPIOA, BUFF_PONG_Pin, GPIO_PIN_SET);
 
-	HAL_UART_Transmit(&huart3, bufferPONG, sizeof(bufferPONG), 10);
+	HAL_UART_Transmit(&huart3, bufferPONG, sizeof(bufferPONG), 15);
 
 	//HAL_GPIO_WritePin(GPIOA, BUFF_PONG_Pin, GPIO_PIN_RESET);
 }
@@ -762,7 +823,7 @@ void fsm(estados_t *estado, eventos_t eventos){
 
 	estados_t estado_anterior = *estado;
 
-	if(estado_anterior == START){
+	if(estado_anterior == INICIO){
 		switch(eventos){
 		case boton_OK:
 			*estado = GUARDANDO_EN_PING;
@@ -776,14 +837,14 @@ void fsm(estados_t *estado, eventos_t eventos){
 	}
 	else if(estado_anterior == GUARDANDO_EN_PING){
 		switch(eventos){
-			case trigger_disparado:
+			case boton_FLECHA:
 				*estado = PAUSA;
 				break;
 			case evt_buffer_lleno:
 				*estado = GUARDANDO_EN_PONG;
 				break;
-			/*case boton_OK:
-				*estado = PAUSA;*/
+			case trigger_disparado:
+				*estado = TRIGGER_TERMINADO;
 				break;
 			default:
 				break;
@@ -791,11 +852,14 @@ void fsm(estados_t *estado, eventos_t eventos){
 	}
 	else  if(estado_anterior == GUARDANDO_EN_PONG){
 		switch(eventos){
-			case trigger_disparado:
+			case boton_FLECHA:
 				*estado = PAUSA;
 				break;
 			case evt_buffer_lleno:
 				*estado = GUARDANDO_EN_PING;
+				break;
+			case trigger_disparado:
+				*estado = TRIGGER_TERMINADO;
 				break;
 			default:
 				break;
@@ -804,16 +868,32 @@ void fsm(estados_t *estado, eventos_t eventos){
 	else if(estado_anterior == PAUSA){
 		switch(eventos){
 			case boton_OK:
-				*estado = START;
+				*estado = GUARDANDO_EN_PING;
 				break;
+			case boton_ESC:
+				*estado = INICIO;
 			default:
 				break;
+		}
+	}
+	else if(estado_anterior == TRIGGER_TERMINADO){
+		switch(eventos){
+		case boton_ESC:
+			*estado = INICIO;
+			break;
+		default:
+			break;
 		}
 	}
 	else if(estado_anterior == C_RESOLUCION){
 		switch(eventos){
 			case boton_OK:
-				*estado = C_RESOLUCION_8bit;
+				if(OFFSET == 1){
+					*estado = C_RESOLUCION_8bit;
+				}
+				else{
+					*estado = C_RESOLUCION_12bit;
+				}
 				break;
 			case boton_FLECHA:
 				*estado = C_TRIGGER;
@@ -849,7 +929,12 @@ void fsm(estados_t *estado, eventos_t eventos){
 	else if(estado_anterior == C_TRIGGER){
 		switch(eventos){
 			case boton_OK:
-				*estado = C_TRIGGER_SET;
+				if(flanco == 0){
+					*estado = C_TRIGGER_ASC;
+				}
+				else{
+					*estado = C_TRIGGER_DESC;
+				}
 				break;
 			case boton_FLECHA:
 				*estado = C_MUESTRAS;
@@ -858,11 +943,24 @@ void fsm(estados_t *estado, eventos_t eventos){
 				break;
 		}
 	}
-	else if(estado_anterior == C_TRIGGER_SET){
+	else if(estado_anterior == C_TRIGGER_ASC){
 		switch(eventos){
-			case boton_OK:
+			case boton_ESC:
 				*estado = C_TRIGGER;
 				break;
+			case boton_FLECHA:
+				*estado = C_TRIGGER_DESC;
+			default:
+				break;
+		}
+	}
+	else if(estado_anterior == C_TRIGGER_DESC){
+		switch(eventos){
+			case boton_ESC:
+				*estado = C_TRIGGER;
+				break;
+			case boton_FLECHA:
+				*estado = C_TRIGGER_ASC;
 			default:
 				break;
 		}
@@ -870,10 +968,16 @@ void fsm(estados_t *estado, eventos_t eventos){
 	else if(estado_anterior == C_MUESTRAS){
 		switch(eventos){
 			case boton_OK:
-				*estado = C_MUESTRAS_500;
+				if(muestras == 0){
+					*estado = C_MUESTRAS_500;
+				}
+				else{
+					*estado = C_MUESTRAS_1000;
+				}
+
 				break;
 			case boton_FLECHA:
-				*estado = START;
+				*estado = INICIO;
 				break;
 			default:
 				break;
@@ -908,12 +1012,29 @@ void fsm(estados_t *estado, eventos_t eventos){
 
 	if(estado_anterior != *estado){
 		switch(estado_anterior){
-		case START:
+		case INICIO:
 
 			if(*estado == GUARDANDO_EN_PING){
-				//Ya no me encuentro en el estado de configuracion, pongo el flag en 0.
-				TRIGGER_flag = 0;
-				HAL_ADC_Stop(&hadc2);		//Detengo el ADC que mide el potenciometro para el valor del trigger.
+
+				plotInicio();
+
+				//Segun las condiciones configuradas para dar inicio a la adquisicion y transmision.
+				if(OFFSET == 1){		//8bits
+					if(muestras == 0){
+						max_buff_trigger = 6;
+					}
+					else{
+						max_buff_trigger  = 11;
+					}
+				}
+				else{				//12bits
+					if(muestras == 0){
+						max_buff_trigger = 11;
+					}
+					else{
+						max_buff_trigger  = 22;
+					}
+				}
 
 				Swap_Buffer(0);
 				HAL_TIM_Base_Start_IT(&htim2);
@@ -932,6 +1053,17 @@ void fsm(estados_t *estado, eventos_t eventos){
 			if(*estado == PAUSA){
 				HAL_TIM_Base_Stop_IT(&htim2);
 				HAL_ADC_Stop(&hadc1);
+
+				fillRect(20, 80, 100, 15, BLACK);
+				ST7735_WriteString(40, 80, "Pausado", Font_7x10, RED, BLACK);
+			}
+			else if(*estado == TRIGGER_TERMINADO){
+				HAL_TIM_Base_Stop_IT(&htim2);
+				HAL_ADC_Stop(&hadc1);
+
+				fillRect(20, 80, 100, 15, BLACK);
+				ST7735_WriteString(40, 80, "Trigger", Font_7x10, color(27,57,1), BLACK);
+				ST7735_WriteString(35, 100, "Disparado", Font_7x10,  color(27,57,1), BLACK);
 			}
 
 			break;
@@ -942,64 +1074,187 @@ void fsm(estados_t *estado, eventos_t eventos){
 			if(*estado == PAUSA){
 				HAL_TIM_Base_Stop_IT(&htim2);
 				HAL_ADC_Stop(&hadc1);
+
+				fillRect(20, 80, 100, 15, BLACK);
+				ST7735_WriteString(40, 80, "Pausado", Font_7x10, RED, BLACK);
+			}
+			else if(*estado == TRIGGER_TERMINADO){
+				HAL_TIM_Base_Stop_IT(&htim2);
+				HAL_ADC_Stop(&hadc1);
+
+				fillRect(20, 80, 100, 15, BLACK);
+				ST7735_WriteString(40, 80, "Trigger", Font_7x10, color(27,57,1), BLACK);
+				ST7735_WriteString(35, 100, "Disparado", Font_7x10,  color(27,57,1), BLACK);
 			}
 
 			break;
 		case PAUSA:
-			TRIGGER_flag = 1;
-			HAL_ADC_Start(&hadc2);		//START el ADC del pot. del trigger.
+			if(*estado == GUARDANDO_EN_PING){
+
+				fillRect(20, 80, 100, 15, BLACK);
+				ST7735_WriteString(20, 80, "Transmitiendo", Font_7x10, GREEN, BLACK);
+
+				Swap_Buffer(0);
+				HAL_TIM_Base_Start_IT(&htim2);
+				HAL_ADC_Start(&hadc1);
+			}
+			else if(*estado == INICIO){
+
+				plotConfig();
+				fillCircle( 21, 75, 5, BLUE);
+			}
+			break;
+		case TRIGGER_TERMINADO:
+				plotConfig();
+				fillCircle( 21, 75, 5, BLUE);
 			break;
 
 		case C_RESOLUCION:
 
 			if(*estado == C_TRIGGER){
+				//Se mueve el cursor circular en el menu de config.
 				fillCircle( 21, 94, 5, BLACK);
 				fillCircle( 21, 115, 5, BLUE);
-			}
-			else{	//Ahora estoy en el estado resolucion 8bit.
-				fillScreen(BLACK);
-				plotResolucion();
 
+			}
+			else if(*estado == C_RESOLUCION_8bit){	//Ahora estoy en el estado resolucion 8bit.
+
+				plotResolucion();
+				fillCircle(35, 74, 5, BLUE);
+
+			}
+			else{
+
+				plotResolucion();
+				fillCircle(35, 94, 5, BLUE);
 			}
 			break;
 		case C_RESOLUCION_8bit:
 			if(*estado == C_RESOLUCION_12bit){
+				//Se mueve el cursor circular en el menu resolucion
+
+				OFFSET = 2;		//Ahora estoy en resolucion de 12bits.
+
 				fillCircle(35, 74, 5, BLACK);
 				fillCircle(35, 94, 5, BLUE);
+
 			}
 			else{
-				fillScreen(BLACK);
 				plotConfig();
+				fillCircle( 21, 94, 5, BLUE);
 			}
 			break;
 		case C_RESOLUCION_12bit:
 			if(*estado == C_RESOLUCION_8bit){
+				//Se mueve el cursor circular en el menu resolucion
+
+				OFFSET = 1;		//Ahora estoy en resolucion de 8bits.
+
 				fillCircle(35, 94, 5, BLACK);
 				fillCircle(35, 74, 5, BLUE);
+
 			}
 			else{
+
 				plotConfig();
+				fillCircle( 21, 94, 5, BLUE);
 			}
 			break;
 		case C_TRIGGER:
 			if(*estado == C_MUESTRAS){
+
 				fillCircle( 21, 115, 5, BLACK);
 				fillCircle( 21, 134, 5, BLUE);
 			}
 			else{	//Ahora estoy en el estado trigger set.
+				ADC_TRIGGER_flag = 1;
+				HAL_ADC_Start(&hadc2);
 				plotTrigger();
+
+				if(*estado == C_TRIGGER_ASC){
+					fillCircle(23, 105, 5, BLUE);
+				}
+				else{
+					fillCircle(23, 123, 5, BLUE);
+				}
+
+			}
+			break;
+		case C_TRIGGER_ASC:
+			if(*estado == C_TRIGGER){
+
+				//Ya no me encuentro en el estado de configuracion, pongo el flag en 0.
+				ADC_TRIGGER_flag = 0;
+				HAL_ADC_Stop(&hadc2);		//Detengo el ADC que mide el potenciometro para el valor del trigger.
+
+				plotConfig();
+				fillCircle( 21, 115, 5, BLUE);
+			}
+			else if(*estado == C_TRIGGER_DESC){
+
+				flanco = 1;	//Ahora estoy en flanco descendente
+
+				fillCircle(23, 105, 5, BLACK);
+				fillCircle(23, 123, 5, BLUE);
+			}
+			break;
+		case C_TRIGGER_DESC:
+			if(*estado == C_TRIGGER){
+
+				//Ya no me encuentro en el estado de configuracion, pongo el flag en 0.
+				ADC_TRIGGER_flag = 0;
+				HAL_ADC_Stop(&hadc2);		//Detengo el ADC que mide el potenciometro para el valor del trigger.
+
+				plotConfig();
+				fillCircle( 21, 115, 5, BLUE);
+			}
+			else if(*estado == C_TRIGGER_ASC){
+
+				flanco = 0;	//Ahora estoy en flanco ascendente
+
+				fillCircle(23, 105, 5, BLUE);
+				fillCircle(23, 123, 5, BLACK);
 			}
 			break;
 		case C_MUESTRAS:
-			if(*estado == START){
+			if(*estado == INICIO){
+				//Se mueve el cursor circular en el menu config.
 				fillCircle( 21, 134, 5, BLACK);
 				fillCircle( 21, 75, 5, BLUE);
 			}
-			else{	//Ahora estoy en el estado muestras 500.
+			else if(*estado == C_MUESTRAS_500){	//Ahora estoy en el estado muestras 500.
 				plotMuestras();
+				fillCircle(21, 84, 5, BLUE);
+			}
+			else{
+				plotMuestras();
+				fillCircle(21, 104, 5, BLUE);
 			}
 			break;
+		case C_MUESTRAS_500:
+			if(*estado == C_MUESTRAS){
+				plotConfig();
+				fillCircle( 21, 134, 5, BLUE);
+			}
+			else if(*estado == C_MUESTRAS_1000){
 
+				muestras = 1;
+
+				fillCircle(21, 84, 5, BLACK);
+				fillCircle(21, 104, 5, BLUE);
+			}
+			break;
+		case C_MUESTRAS_1000:
+			if(*estado == C_MUESTRAS){
+				plotConfig();
+				fillCircle( 21, 134, 5, BLUE);
+			}
+			else if(*estado == C_MUESTRAS_500){
+
+				fillCircle(21, 84, 5, BLUE);
+				fillCircle(21, 104, 5, BLACK);
+			}
+			break;
 		default:
 			break;
 		}
