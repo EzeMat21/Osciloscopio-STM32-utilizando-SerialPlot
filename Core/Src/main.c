@@ -30,6 +30,7 @@
 #include "GFX_FUNCTIONS.h"
 #include "fonts.h"
 #include "ST7735.h"
+#include "stm32f1xx_hal.h"
 
 /* USER CODE END Includes */
 
@@ -143,6 +144,8 @@ volatile uint8_t flanco = 0;
 
 volatile uint8_t muestras = 0;
 
+volatile uint16_t trigger_valor_09 = 127 - (127>>6);
+volatile uint16_t trigger_valor_11 = 127 + (127>>6);
 
 /* USER CODE END PV */
 
@@ -259,7 +262,6 @@ int main(void)
 				else{
 					trigger_valor = HAL_ADC_GetValue(&hadc2) & 0XFFF;
 				}
-
 
 				if(valor_anterior != trigger_valor){
 
@@ -480,7 +482,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 72-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 20-1;
+  htim2.Init.Period = 17-1;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -610,10 +612,10 @@ void plotConfig(){
 	  ST7735_WriteString(18, 25, "CONFIGURACION", Font_7x10, WHITE, BLACK);
 
 
-	  ST7735_WriteString(35, 70, "Inicio", Font_7x10, RED, YELLOW);
-	  ST7735_WriteString(35, 90, "Resolucion", Font_7x10, RED, YELLOW);
-	  ST7735_WriteString(35, 110, "Trigger", Font_7x10, RED, YELLOW);
-	  ST7735_WriteString(35, 130, "Muestras", Font_7x10, RED, YELLOW);
+	  ST7735_WriteString(35, 70, "Inicio", Font_7x10, BLACK, YELLOW);
+	  ST7735_WriteString(35, 90, "Resolucion", Font_7x10, BLACK, YELLOW);
+	  ST7735_WriteString(35, 110, "Trigger", Font_7x10, BLACK, YELLOW);
+	  ST7735_WriteString(35, 130, "Muestras", Font_7x10, BLACK, YELLOW);
 }
 
 void plotInicio(){
@@ -716,75 +718,56 @@ uint8_t ADC_Conversion(){
 
 
 	uint16_t valor_medido = 0;
-
 	HAL_ADC_Start(&hadc1);
-	if(HAL_ADC_PollForConversion(&hadc1, 0) == HAL_OK){
+	if (HAL_ADC_PollForConversion(&hadc1, 0) == HAL_OK) {
+	    //HAL_GPIO_WritePin(GPIOB, DEBUG_ADC1_Pin, GPIO_PIN_SET);
 
-		HAL_GPIO_WritePin(GPIOB, DEBUG_ADC1_Pin, GPIO_PIN_SET);
-
-		if(OFFSET == 1){
-			*puntero_escritura = (HAL_ADC_GetValue(&hadc1)>>4) & 0XFF;
-
-			valor_medido = *puntero_escritura;
-		}
-		else{	//OFFSET = 2
-			*puntero_escritura = (HAL_ADC_GetValue(&hadc1)>>8) & 0X0F;
-			*(puntero_escritura + 1) = HAL_ADC_GetValue(&hadc1) & 0XFF;
-
-			valor_medido = ((*puntero_escritura)<<8) + *(puntero_escritura+1);
-		}
+	    uint32_t adc_value = HAL_ADC_GetValue(&hadc1);
+	    if (OFFSET == 1) {
+	        *puntero_escritura = (adc_value >> 4) & 0xFF;
+	        valor_medido = *puntero_escritura;
+	    } else { // OFFSET = 2
+	        *puntero_escritura = (adc_value >> 8) & 0x0F;
+	        *(puntero_escritura + 1) = adc_value & 0xFF;
+	        //valor_medido = ((*puntero_escritura) << 8) + *(puntero_escritura + 1);
+	        valor_medido = adc_value;
+	    }
 
 
-		if( (trigger_flag == 1) && (( (valor_medido< operacion_95(trigger_valor)) && flanco == 0) ||  ((valor_medido> operacion_105(trigger_valor)) && flanco == 1))){
-		//if( (trigger_flag == 1) && (( (valor_medido< trigger_valor) && flanco == 0) ||  ((valor_medido> trigger_valor) && flanco == 1))){
-			trigger_en_condiciones = 1;
-			trigger_flag = 0;
-		}
+	    if (trigger_flag == 1) {
+	        if ((flanco == 0 && valor_medido < trigger_valor_09) || (flanco == 1 && valor_medido > trigger_valor_11)) {
+	            trigger_en_condiciones = 1;
+	            trigger_flag = 0;
+	        }
+	    }
 
-		//if( *puntero_escritura > trigger_valor){
-		if( (trigger_en_condiciones == 1) &&  ((valor_medido> operacion_105(trigger_valor) && flanco == 0) ||  (valor_medido<operacion_95(trigger_valor) && flanco == 1)) ){
-		//if( (trigger_en_condiciones == 1) &&  ((valor_medido> trigger_valor && flanco == 0) ||  (valor_medido<trigger_valor && flanco == 1)) ){
-			trigger_activado = 1;	//Para avisar que luego de un n numero de muestras el ADC se corta.
-			trigger_en_condiciones = 0;
-		}
+	    if (trigger_en_condiciones == 1) {
+	        if ((flanco == 0 && valor_medido > trigger_valor_09) || (flanco == 1 && valor_medido < trigger_valor_11)) {
+	            trigger_activado = 1;
+	            trigger_en_condiciones = 0;
+	        }
+	    }
 
-		puntero_escritura = puntero_escritura + OFFSET;		//Se incrementa el puntero.
+	    puntero_escritura += OFFSET;
 
+	    if (puntero_escritura >= posicion_final_puntero_escritura) {
+	        if (trigger_activado == 1) {
+	            if (++trigger_contador >= max_buff_trigger) {
+	                trigger_contador = 0;
+	                trigger_activado = 0;
+	                trigger_flag = 1;
+	                return 2;
+	            }
+	        }
+	        return 1;
+	    } else {
 
-
-		if(puntero_escritura >= posicion_final_puntero_escritura){
-
-			if(trigger_activado == 1){
-				trigger_contador++;
-
-				if(trigger_contador >= max_buff_trigger){
-					trigger_contador = 0;
-					trigger_activado = 0;
-					trigger_flag = 1;
-
-					HAL_GPIO_WritePin(GPIOB, DEBUG_ADC1_Pin, GPIO_PIN_RESET);
-
-					return 2;
-				}
-			}
-
-			HAL_GPIO_WritePin(GPIOB, DEBUG_ADC1_Pin, GPIO_PIN_RESET);
-			return 1;
-		}
-		else{
-			HAL_GPIO_WritePin(GPIOB, DEBUG_ADC1_Pin, GPIO_PIN_RESET);
-			return 0;
-		}
-
-
-
+	        return -1;
+	    }
+	} else {
+	    return -1;
 	}
 
-
-
-	else{
-		return -1;
-	}
 }
 
 void Swap_Buffer(uint8_t swap_condicion){
@@ -803,7 +786,7 @@ void UART_TX_PING(){
 
 	//HAL_GPIO_WritePin(GPIOA, BUFF_PING_Pin, GPIO_PIN_SET);
 
-	HAL_UART_Transmit(&huart3, bufferPING, sizeof(bufferPING), 15);
+	HAL_UART_Transmit(&huart3, bufferPING, sizeof(bufferPING), 10);
 
 	//HAL_GPIO_WritePin(GPIOA, BUFF_PING_Pin, GPIO_PIN_RESET);
 }
@@ -813,456 +796,291 @@ void UART_TX_PONG(){
 
 	//HAL_GPIO_WritePin(GPIOA, BUFF_PONG_Pin, GPIO_PIN_SET);
 
-	HAL_UART_Transmit(&huart3, bufferPONG, sizeof(bufferPONG), 15);
+	HAL_UART_Transmit(&huart3, bufferPONG, sizeof(bufferPONG), 10);
 
 	//HAL_GPIO_WritePin(GPIOA, BUFF_PONG_Pin, GPIO_PIN_RESET);
 }
 
+void fsm(estados_t *estado, eventos_t eventos) {
+    estados_t estado_anterior = *estado;
 
-void fsm(estados_t *estado, eventos_t eventos){
+    switch (estado_anterior) {
+        case GUARDANDO_EN_PING:
+        case GUARDANDO_EN_PONG:
+            if (eventos == boton_FLECHA) {
+                *estado = PAUSA;
+            } else if (eventos == evt_buffer_lleno) {
+                *estado = (estado_anterior == GUARDANDO_EN_PING) ? GUARDANDO_EN_PONG : GUARDANDO_EN_PING;
+            } else if (eventos == trigger_disparado) {
+                *estado = TRIGGER_TERMINADO;
+            }
+            break;
+        case INICIO:
+            if (eventos == boton_OK) {
+                *estado = GUARDANDO_EN_PING;
+            } else if (eventos == boton_FLECHA) {
+                *estado = C_RESOLUCION;
+            }
+            break;
+        case PAUSA:
+            if (eventos == boton_OK) {
+                *estado = GUARDANDO_EN_PING;
+            } else if (eventos == boton_ESC) {
+                *estado = INICIO;
+            }
+            break;
+        case TRIGGER_TERMINADO:
+            if (eventos == boton_ESC) {
+                *estado = INICIO;
+            }
+            break;
+        case C_RESOLUCION:
+            if (eventos == boton_OK) {
+                *estado = (OFFSET == 1) ? C_RESOLUCION_8bit : C_RESOLUCION_12bit;
+            } else if (eventos == boton_FLECHA) {
+                *estado = C_TRIGGER;
+            }
+            break;
+        case C_RESOLUCION_8bit:
+            if (eventos == boton_ESC) {
+                *estado = C_RESOLUCION;
+            } else if (eventos == boton_FLECHA) {
+                *estado = C_RESOLUCION_12bit;
+            }
+            break;
+        case C_RESOLUCION_12bit:
+            if (eventos == boton_ESC) {
+                *estado = C_RESOLUCION;
+            } else if (eventos == boton_FLECHA) {
+                *estado = C_RESOLUCION_8bit;
+            }
+            break;
+        case C_TRIGGER:
+            if (eventos == boton_OK) {
+                *estado = (flanco == 0) ? C_TRIGGER_ASC : C_TRIGGER_DESC;
+            } else if (eventos == boton_FLECHA) {
+                *estado = C_MUESTRAS;
+            }
+            break;
+        case C_TRIGGER_ASC:
+            if (eventos == boton_ESC) {
+                *estado = C_TRIGGER;
+            } else if (eventos == boton_FLECHA) {
+                *estado = C_TRIGGER_DESC;
+            }
+            break;
+        case C_TRIGGER_DESC:
+            if (eventos == boton_ESC) {
+                *estado = C_TRIGGER;
+            } else if (eventos == boton_FLECHA) {
+                *estado = C_TRIGGER_ASC;
+            }
+            break;
+        case C_MUESTRAS:
+            if (eventos == boton_OK) {
+                *estado = (muestras == 0) ? C_MUESTRAS_500 : C_MUESTRAS_1000;
+            } else if (eventos == boton_FLECHA) {
+                *estado = INICIO;
+            }
+            break;
+        case C_MUESTRAS_500:
+            if (eventos == boton_ESC) {
+                *estado = C_MUESTRAS;
+            } else if (eventos == boton_FLECHA) {
+                *estado = C_MUESTRAS_1000;
+            }
+            break;
+        case C_MUESTRAS_1000:
+            if (eventos == boton_ESC) {
+                *estado = C_MUESTRAS;
+            } else if (eventos == boton_FLECHA) {
+                *estado = C_MUESTRAS_500;
+            }
+            break;
+        default:
+            break;
+    }
 
-	estados_t estado_anterior = *estado;
+    if (estado_anterior != *estado) {
+        switch (estado_anterior) {
+            case GUARDANDO_EN_PING:
+                Swap_Buffer(1);
+                UART_TX_PING_flag = 1;
+                if (*estado == PAUSA || *estado == TRIGGER_TERMINADO) {
+                    HAL_TIM_Base_Stop_IT(&htim2);
+                    HAL_ADC_Stop(&hadc1);
+                    fillRect(20, 80, 100, 15, BLACK);
+                    if (*estado == PAUSA) {
+                        ST7735_WriteString(40, 80, "Pausado", Font_7x10, RED, BLACK);
+                    } else {
+                        ST7735_WriteString(40, 80, "Trigger", Font_7x10, color(27, 57, 1), BLACK);
+                        ST7735_WriteString(35, 100, "Disparado", Font_7x10, color(27, 57, 1), BLACK);
+                    }
+                }
+                break;
+            case GUARDANDO_EN_PONG:
+                Swap_Buffer(0);
+                UART_TX_PONG_flag = 1;
+                if (*estado == PAUSA || *estado == TRIGGER_TERMINADO) {
+                    HAL_TIM_Base_Stop_IT(&htim2);
+                    HAL_ADC_Stop(&hadc1);
+                    fillRect(20, 80, 100, 15, BLACK);
+                    if (*estado == PAUSA) {
+                        ST7735_WriteString(40, 80, "Pausado", Font_7x10, RED, BLACK);
+                    } else {
+                        ST7735_WriteString(40, 80, "Trigger", Font_7x10, color(27, 57, 1), BLACK);
+                        ST7735_WriteString(35, 100, "Disparado", Font_7x10, color(27, 57, 1), BLACK);
+                    }
+                }
+                break;
+            case INICIO:
+                if (*estado == GUARDANDO_EN_PING) {
+                    plotInicio();
+                    max_buff_trigger = (OFFSET == 1) ? ((muestras == 0) ? 6 : 11) : ((muestras == 0) ? 11 : 22);
+                    Swap_Buffer(0);
+                    HAL_TIM_Base_Start_IT(&htim2);
+                    HAL_ADC_Start(&hadc1);
+                } else {
+                    fillCircle(21, 75, 5, BLACK);
+                    fillCircle(21, 94, 5, BLUE);
+                }
+                break;
+            case PAUSA:
+                if (*estado == GUARDANDO_EN_PING) {
+                    fillRect(20, 80, 100, 15, BLACK);
+                    ST7735_WriteString(20, 80, "Transmitiendo", Font_7x10, GREEN, BLACK);
+                    Swap_Buffer(0);
+                    HAL_TIM_Base_Start_IT(&htim2);
+                    HAL_ADC_Start(&hadc1);
+                } else if (*estado == INICIO) {
+                    plotConfig();
+                    fillCircle(21, 75, 5, BLUE);
+                }
+                break;
+            case TRIGGER_TERMINADO:
+                plotConfig();
+                fillCircle(21, 75, 5, BLUE);
+                break;
+            case C_RESOLUCION:
+                if (*estado == C_TRIGGER) {
+                    fillCircle(21, 94, 5, BLACK);
+                    fillCircle(21, 115, 5, BLUE);
+                } else if (*estado == C_RESOLUCION_8bit) {
+                    plotResolucion();
+                    fillCircle(35, 74, 5, BLUE);
+                } else {
+                    plotResolucion();
+                    fillCircle(35, 94, 5, BLUE);
+                }
+                break;
+            case C_RESOLUCION_8bit:
+                if (*estado == C_RESOLUCION_12bit) {
+                    OFFSET = 2;
+                    //htim2.Init.Period = 30-1;
 
-	if(estado_anterior == INICIO){
-		switch(eventos){
-		case boton_OK:
-			*estado = GUARDANDO_EN_PING;
-			break;
-		case boton_FLECHA:
-			*estado = C_RESOLUCION;
-			break;
-		default:
-			break;
-			}
-	}
-	else if(estado_anterior == GUARDANDO_EN_PING){
-		switch(eventos){
-			case boton_FLECHA:
-				*estado = PAUSA;
-				break;
-			case evt_buffer_lleno:
-				*estado = GUARDANDO_EN_PONG;
-				break;
-			case trigger_disparado:
-				*estado = TRIGGER_TERMINADO;
-				break;
-			default:
-				break;
-			}
-	}
-	else  if(estado_anterior == GUARDANDO_EN_PONG){
-		switch(eventos){
-			case boton_FLECHA:
-				*estado = PAUSA;
-				break;
-			case evt_buffer_lleno:
-				*estado = GUARDANDO_EN_PING;
-				break;
-			case trigger_disparado:
-				*estado = TRIGGER_TERMINADO;
-				break;
-			default:
-				break;
-		}
-	}
-	else if(estado_anterior == PAUSA){
-		switch(eventos){
-			case boton_OK:
-				*estado = GUARDANDO_EN_PING;
-				break;
-			case boton_ESC:
-				*estado = INICIO;
-			default:
-				break;
-		}
-	}
-	else if(estado_anterior == TRIGGER_TERMINADO){
-		switch(eventos){
-		case boton_ESC:
-			*estado = INICIO;
-			break;
-		default:
-			break;
-		}
-	}
-	else if(estado_anterior == C_RESOLUCION){
-		switch(eventos){
-			case boton_OK:
-				if(OFFSET == 1){
-					*estado = C_RESOLUCION_8bit;
-				}
-				else{
-					*estado = C_RESOLUCION_12bit;
-				}
-				break;
-			case boton_FLECHA:
-				*estado = C_TRIGGER;
-				break;
-			default:
-				break;
-		}
-	}
-	else if(estado_anterior == C_RESOLUCION_8bit){
-		switch(eventos){
-			case boton_ESC:
-				*estado = C_RESOLUCION;
-				break;
-			case boton_FLECHA:
-				*estado = C_RESOLUCION_12bit;
-				break;
-			default:
-				break;
-		}
-	}
-	else if(estado_anterior == C_RESOLUCION_12bit){
-		switch(eventos){
-			case boton_ESC:
-				*estado = C_RESOLUCION;
-				break;
-			case boton_FLECHA:
-				*estado = C_RESOLUCION_8bit;
-				break;
-			default:
-				break;
-		}
-	}
-	else if(estado_anterior == C_TRIGGER){
-		switch(eventos){
-			case boton_OK:
-				if(flanco == 0){
-					*estado = C_TRIGGER_ASC;
-				}
-				else{
-					*estado = C_TRIGGER_DESC;
-				}
-				break;
-			case boton_FLECHA:
-				*estado = C_MUESTRAS;
-				break;
-			default:
-				break;
-		}
-	}
-	else if(estado_anterior == C_TRIGGER_ASC){
-		switch(eventos){
-			case boton_ESC:
-				*estado = C_TRIGGER;
-				break;
-			case boton_FLECHA:
-				*estado = C_TRIGGER_DESC;
-			default:
-				break;
-		}
-	}
-	else if(estado_anterior == C_TRIGGER_DESC){
-		switch(eventos){
-			case boton_ESC:
-				*estado = C_TRIGGER;
-				break;
-			case boton_FLECHA:
-				*estado = C_TRIGGER_ASC;
-			default:
-				break;
-		}
-	}
-	else if(estado_anterior == C_MUESTRAS){
-		switch(eventos){
-			case boton_OK:
-				if(muestras == 0){
-					*estado = C_MUESTRAS_500;
-				}
-				else{
-					*estado = C_MUESTRAS_1000;
-				}
-
-				break;
-			case boton_FLECHA:
-				*estado = INICIO;
-				break;
-			default:
-				break;
-		}
-	}
-	else if(estado_anterior == C_MUESTRAS_500){
-		switch(eventos){
-			case boton_ESC:
-				*estado = C_MUESTRAS;
-				break;
-			case boton_FLECHA:
-				*estado = C_MUESTRAS_1000;
-				break;
-			default:
-				break;
-		}
-	}
-	else if(estado_anterior == C_MUESTRAS_1000){
-		switch(eventos){
-			case boton_ESC:
-				*estado = C_MUESTRAS;
-				break;
-			case boton_FLECHA:
-				*estado = C_MUESTRAS_500;
-				break;
-			default:
-				break;
-		}
-	}
+                    TIM2->ARR = 29-1;
 
 
+                    fillCircle(35, 74, 5, BLACK);
+                    fillCircle(35, 94, 5, BLUE);
+                } else {
+                    plotConfig();
+                    fillCircle(21, 94, 5, BLUE);
+                }
+                break;
+            case C_RESOLUCION_12bit:
+                if (*estado == C_RESOLUCION_8bit) {
+                    OFFSET = 1;
 
-	if(estado_anterior != *estado){
-		switch(estado_anterior){
-		case INICIO:
+                    TIM2->ARR = 17-1;
 
-			if(*estado == GUARDANDO_EN_PING){
+                    fillCircle(35, 94, 5, BLACK);
+                    fillCircle(35, 74, 5, BLUE);
+                } else {
+                    plotConfig();
+                    fillCircle(21, 94, 5, BLUE);
+                }
+                break;
+            case C_TRIGGER:
+                if (*estado == C_MUESTRAS) {
+                    fillCircle(21, 115, 5, BLACK);
+                    fillCircle(21, 134, 5, BLUE);
+                } else {
+                    ADC_TRIGGER_flag = 1;
+                    HAL_ADC_Start(&hadc2);
+                    plotTrigger();
+                    fillCircle(23, (*estado == C_TRIGGER_ASC) ? 105 : 123, 5, BLUE);
+                }
+                break;
+            case C_TRIGGER_ASC:
+                if (*estado == C_TRIGGER) {
 
-				plotInicio();
+                	ADC_TRIGGER_flag = 0;
+    				trigger_valor_09 = trigger_valor - (trigger_valor>>6);
+    				trigger_valor_11 = trigger_valor + (trigger_valor>>6);
 
-				//Segun las condiciones configuradas para dar inicio a la adquisicion y transmision.
-				if(OFFSET == 1){		//8bits
-					if(muestras == 0){
-						max_buff_trigger = 6;
-					}
-					else{
-						max_buff_trigger  = 11;
-					}
-				}
-				else{				//12bits
-					if(muestras == 0){
-						max_buff_trigger = 11;
-					}
-					else{
-						max_buff_trigger  = 22;
-					}
-				}
+                    HAL_ADC_Stop(&hadc2);
+                    plotConfig();
+                    fillCircle(21, 115, 5, BLUE);
+                } else if (*estado == C_TRIGGER_DESC) {
+                    flanco = 1;
+                    fillCircle(23, 105, 5, BLACK);
+                    fillCircle(23, 123, 5, BLUE);
+                }
+                break;
+            case C_TRIGGER_DESC:
+                if (*estado == C_TRIGGER) {
 
-				Swap_Buffer(0);
-				HAL_TIM_Base_Start_IT(&htim2);
-				HAL_ADC_Start(&hadc1);
-			}
-			else{	//Ahora estoy en el estado Resolucion
-				fillCircle( 21, 75, 5, BLACK);
-				fillCircle( 21, 94, 5, BLUE);
-			}
+                	ADC_TRIGGER_flag = 0;
+    				trigger_valor_09 = trigger_valor - (trigger_valor>>6);
+    				trigger_valor_11 = trigger_valor + (trigger_valor>>6);
 
-			break;
-		case GUARDANDO_EN_PING:
-			Swap_Buffer(1);
-			UART_TX_PING_flag = 1;
-
-			if(*estado == PAUSA){
-				HAL_TIM_Base_Stop_IT(&htim2);
-				HAL_ADC_Stop(&hadc1);
-
-				fillRect(20, 80, 100, 15, BLACK);
-				ST7735_WriteString(40, 80, "Pausado", Font_7x10, RED, BLACK);
-			}
-			else if(*estado == TRIGGER_TERMINADO){
-				HAL_TIM_Base_Stop_IT(&htim2);
-				HAL_ADC_Stop(&hadc1);
-
-				fillRect(20, 80, 100, 15, BLACK);
-				ST7735_WriteString(40, 80, "Trigger", Font_7x10, color(27,57,1), BLACK);
-				ST7735_WriteString(35, 100, "Disparado", Font_7x10,  color(27,57,1), BLACK);
-			}
-
-			break;
-		case GUARDANDO_EN_PONG:
-			Swap_Buffer(0);
-			UART_TX_PONG_flag = 1;
-
-			if(*estado == PAUSA){
-				HAL_TIM_Base_Stop_IT(&htim2);
-				HAL_ADC_Stop(&hadc1);
-
-				fillRect(20, 80, 100, 15, BLACK);
-				ST7735_WriteString(40, 80, "Pausado", Font_7x10, RED, BLACK);
-			}
-			else if(*estado == TRIGGER_TERMINADO){
-				HAL_TIM_Base_Stop_IT(&htim2);
-				HAL_ADC_Stop(&hadc1);
-
-				fillRect(20, 80, 100, 15, BLACK);
-				ST7735_WriteString(40, 80, "Trigger", Font_7x10, color(27,57,1), BLACK);
-				ST7735_WriteString(35, 100, "Disparado", Font_7x10,  color(27,57,1), BLACK);
-			}
-
-			break;
-		case PAUSA:
-			if(*estado == GUARDANDO_EN_PING){
-
-				fillRect(20, 80, 100, 15, BLACK);
-				ST7735_WriteString(20, 80, "Transmitiendo", Font_7x10, GREEN, BLACK);
-
-				Swap_Buffer(0);
-				HAL_TIM_Base_Start_IT(&htim2);
-				HAL_ADC_Start(&hadc1);
-			}
-			else if(*estado == INICIO){
-
-				plotConfig();
-				fillCircle( 21, 75, 5, BLUE);
-			}
-			break;
-		case TRIGGER_TERMINADO:
-				plotConfig();
-				fillCircle( 21, 75, 5, BLUE);
-			break;
-
-		case C_RESOLUCION:
-
-			if(*estado == C_TRIGGER){
-				//Se mueve el cursor circular en el menu de config.
-				fillCircle( 21, 94, 5, BLACK);
-				fillCircle( 21, 115, 5, BLUE);
-
-			}
-			else if(*estado == C_RESOLUCION_8bit){	//Ahora estoy en el estado resolucion 8bit.
-
-				plotResolucion();
-				fillCircle(35, 74, 5, BLUE);
-
-			}
-			else{
-
-				plotResolucion();
-				fillCircle(35, 94, 5, BLUE);
-			}
-			break;
-		case C_RESOLUCION_8bit:
-			if(*estado == C_RESOLUCION_12bit){
-				//Se mueve el cursor circular en el menu resolucion
-
-				OFFSET = 2;		//Ahora estoy en resolucion de 12bits.
-
-				fillCircle(35, 74, 5, BLACK);
-				fillCircle(35, 94, 5, BLUE);
-
-			}
-			else{
-				plotConfig();
-				fillCircle( 21, 94, 5, BLUE);
-			}
-			break;
-		case C_RESOLUCION_12bit:
-			if(*estado == C_RESOLUCION_8bit){
-				//Se mueve el cursor circular en el menu resolucion
-
-				OFFSET = 1;		//Ahora estoy en resolucion de 8bits.
-
-				fillCircle(35, 94, 5, BLACK);
-				fillCircle(35, 74, 5, BLUE);
-
-			}
-			else{
-
-				plotConfig();
-				fillCircle( 21, 94, 5, BLUE);
-			}
-			break;
-		case C_TRIGGER:
-			if(*estado == C_MUESTRAS){
-
-				fillCircle( 21, 115, 5, BLACK);
-				fillCircle( 21, 134, 5, BLUE);
-			}
-			else{	//Ahora estoy en el estado trigger set.
-				ADC_TRIGGER_flag = 1;
-				HAL_ADC_Start(&hadc2);
-				plotTrigger();
-
-				if(*estado == C_TRIGGER_ASC){
-					fillCircle(23, 105, 5, BLUE);
-				}
-				else{
-					fillCircle(23, 123, 5, BLUE);
-				}
-
-			}
-			break;
-		case C_TRIGGER_ASC:
-			if(*estado == C_TRIGGER){
-
-				//Ya no me encuentro en el estado de configuracion, pongo el flag en 0.
-				ADC_TRIGGER_flag = 0;
-				HAL_ADC_Stop(&hadc2);		//Detengo el ADC que mide el potenciometro para el valor del trigger.
-
-				plotConfig();
-				fillCircle( 21, 115, 5, BLUE);
-			}
-			else if(*estado == C_TRIGGER_DESC){
-
-				flanco = 1;	//Ahora estoy en flanco descendente
-
-				fillCircle(23, 105, 5, BLACK);
-				fillCircle(23, 123, 5, BLUE);
-			}
-			break;
-		case C_TRIGGER_DESC:
-			if(*estado == C_TRIGGER){
-
-				//Ya no me encuentro en el estado de configuracion, pongo el flag en 0.
-				ADC_TRIGGER_flag = 0;
-				HAL_ADC_Stop(&hadc2);		//Detengo el ADC que mide el potenciometro para el valor del trigger.
-
-				plotConfig();
-				fillCircle( 21, 115, 5, BLUE);
-			}
-			else if(*estado == C_TRIGGER_ASC){
-
-				flanco = 0;	//Ahora estoy en flanco ascendente
-
-				fillCircle(23, 105, 5, BLUE);
-				fillCircle(23, 123, 5, BLACK);
-			}
-			break;
-		case C_MUESTRAS:
-			if(*estado == INICIO){
-				//Se mueve el cursor circular en el menu config.
-				fillCircle( 21, 134, 5, BLACK);
-				fillCircle( 21, 75, 5, BLUE);
-			}
-			else if(*estado == C_MUESTRAS_500){	//Ahora estoy en el estado muestras 500.
-				plotMuestras();
-				fillCircle(21, 84, 5, BLUE);
-			}
-			else{
-				plotMuestras();
-				fillCircle(21, 104, 5, BLUE);
-			}
-			break;
-		case C_MUESTRAS_500:
-			if(*estado == C_MUESTRAS){
-				plotConfig();
-				fillCircle( 21, 134, 5, BLUE);
-			}
-			else if(*estado == C_MUESTRAS_1000){
-
-				muestras = 1;
-
-				fillCircle(21, 84, 5, BLACK);
-				fillCircle(21, 104, 5, BLUE);
-			}
-			break;
-		case C_MUESTRAS_1000:
-			if(*estado == C_MUESTRAS){
-				plotConfig();
-				fillCircle( 21, 134, 5, BLUE);
-			}
-			else if(*estado == C_MUESTRAS_500){
-
-				fillCircle(21, 84, 5, BLUE);
-				fillCircle(21, 104, 5, BLACK);
-			}
-			break;
-		default:
-			break;
-		}
-
-	}
-
-
+                    HAL_ADC_Stop(&hadc2);
+                    plotConfig();
+                    fillCircle(21, 115, 5, BLUE);
+                } else if (*estado == C_TRIGGER_ASC) {
+                    flanco = 0;
+                    fillCircle(23, 105, 5, BLUE);
+                    fillCircle(23, 123, 5, BLACK);
+                }
+                break;
+            case C_MUESTRAS:
+                if (*estado == INICIO) {
+                    fillCircle(21, 134, 5, BLACK);
+                    fillCircle(21, 75, 5, BLUE);
+                } else if (*estado == C_MUESTRAS_500) {
+                    plotMuestras();
+                    fillCircle(21, 84, 5, BLUE);
+                } else {
+                    plotMuestras();
+                    fillCircle(21, 104, 5, BLUE);
+                }
+                break;
+            case C_MUESTRAS_500:
+                if (*estado == C_MUESTRAS) {
+                    plotConfig();
+                    fillCircle(21, 134, 5, BLUE);
+                } else if (*estado == C_MUESTRAS_1000) {
+                    muestras = 1;
+                    fillCircle(21, 84, 5, BLACK);
+                    fillCircle(21, 104, 5, BLUE);
+                }
+                break;
+            case C_MUESTRAS_1000:
+                if (*estado == C_MUESTRAS) {
+                    plotConfig();
+                    fillCircle(21, 134, 5, BLUE);
+                } else if (*estado == C_MUESTRAS_500) {
+                    fillCircle(21, 84, 5, BLUE);
+                    fillCircle(21, 104, 5, BLACK);
+                }
+                break;
+            default:
+                break;
+        }
+    }
 }
+
 
 /* USER CODE END 4 */
 
