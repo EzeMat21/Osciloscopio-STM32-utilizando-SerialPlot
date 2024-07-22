@@ -6,6 +6,7 @@ ping-pong, y enviarlas por UART a la PC, donde se visualizarán con el
 programa Serial Plot (o similar)
 (https://hackaday.io/project/5334-serialplot-realtime-plotting-software
 
+La tasa máxima alcanzada de conversión es de 58,8kHz.
 Utilizando un buffer ping pong, se muestran por pantalla los valores de
 tensión obtenidos del ADC. El ADC escribe sobre el buffer PING mientras
 el puerto UART transmite el contenido del PONG, y luego se intercambian
