@@ -12,7 +12,7 @@ el puerto UART transmite el contenido del PONG, y luego se intercambian
 es decir, el ADC comienza a escribir sobre el buffer PONG y el puerto
 UART lo hace sobre el buffer PING. La tasa de adquisión del ADC es de
 1kHz y el UART transmite los datos cada vez que se llena. El uart se
-configuro a una tasa de 950000 baud rate.
+configuro a una tasa de 950.000 baud rate.
 
 La maquina de estados tiene 14 estados. Podemos navegar por un menú a través de una pantalla TFT
 donde podemos configurar la resolución de los datos, el tipo y umbral del trigger así como también la cantidad de muestras una vez disparado el trigger.
