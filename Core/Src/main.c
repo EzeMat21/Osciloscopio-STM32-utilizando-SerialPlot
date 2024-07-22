@@ -80,21 +80,6 @@ typedef enum{
 #define color(r, g, b) ((r << 11) | (g  << 5) | ( b))
 
 
-uint16_t operacion_95(uint16_t x){
-
-	//uint16_t temp = (x >> 5) + (x >> 6);
-	uint16_t temp = x>>4;
-    return x - temp;
-}
-
-uint16_t operacion_105(uint16_t x){
-
-	//uint16_t temp = (x >> 5) + (x >> 6);
-	uint16_t temp = x>>4;
-    return x + temp;
-}
-
-
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -144,8 +129,8 @@ volatile uint8_t flanco = 0;
 
 volatile uint8_t muestras = 0;
 
-volatile uint16_t trigger_valor_09 = 127 - (127>>6);
-volatile uint16_t trigger_valor_11 = 127 + (127>>6);
+volatile uint16_t trigger_valor_09 = 127 - (127>>3);
+volatile uint16_t trigger_valor_11 = 127 + (127>>3);
 
 /* USER CODE END PV */
 
@@ -1016,8 +1001,8 @@ void fsm(estados_t *estado, eventos_t eventos) {
                 if (*estado == C_TRIGGER) {
 
                 	ADC_TRIGGER_flag = 0;
-    				trigger_valor_09 = trigger_valor - (trigger_valor>>6);
-    				trigger_valor_11 = trigger_valor + (trigger_valor>>6);
+    				trigger_valor_09 = trigger_valor - (trigger_valor>>3);
+    				trigger_valor_11 = trigger_valor + (trigger_valor>>3);
 
                     HAL_ADC_Stop(&hadc2);
                     plotConfig();
