@@ -12,11 +12,11 @@ el puerto UART transmite el contenido del PONG, y luego se intercambian
 es decir, el ADC comienza a escribir sobre el buffer PONG y el puerto
 UART lo hace sobre el buffer PING. La tasa de adquisión del ADC es de
 1kHz y el UART transmite los datos cada vez que se llena. El uart se
-configuro a una tasa de 115200 baud rate.
+configuro a una tasa de 950000 baud rate.
 
-La maquina de estados tiene 3 estados: guardando_en_ping,
-guardando_en_pong e inicio. En el inicio se configura el ADC como el
-UART. Luego del inicio se pasa al estado guardando_en_ping. Aquí el ADC
+La maquina de estados tiene 14 estados. Podemos navegar por un menú a través de una pantalla TFT
+donde podemos configurar la resolución de los datos, el tipo y umbral del trigger así como también la cantidad de muestras una vez disparado el trigger.
+Luego del inicio se pasa al estado guardando_en_ping. Aquí el ADC
 va llenando el buffer ping. Cuando este se llena, se activa el evento de
 buffer lleno pasando a su vez al estado guardando_en_pong. En esta
 transición el puntero de escritura del buffer se cambia, apuntando ahora
