@@ -3778,7 +3778,7 @@ uint8_t ADC_Conversion(){
  80019a6:	b2db      	uxtb	r3, r3
  80019a8:	2b01      	cmp	r3, #1
  80019aa:	d11b      	bne.n	80019e4 <ADC_Conversion+0xac>
-	        if ((flanco == 0 && valor_medido < trigger_valor_09) || (flanco == 1 && valor_medido > trigger_valor_11)) {
+	        if ((flanco == 0 && (valor_medido < trigger_valor_09)) || (flanco == 1 && (valor_medido > trigger_valor_11)) ) {
  80019ac:	4b3c      	ldr	r3, [pc, #240]	@ (8001aa0 <ADC_Conversion+0x168>)
  80019ae:	781b      	ldrb	r3, [r3, #0]
  80019b0:	b2db      	uxtb	r3, r3
@@ -3818,13 +3818,13 @@ uint8_t ADC_Conversion(){
  80019e8:	b2db      	uxtb	r3, r3
  80019ea:	2b01      	cmp	r3, #1
  80019ec:	d11b      	bne.n	8001a26 <ADC_Conversion+0xee>
-	        if ((flanco == 0 && valor_medido > trigger_valor_09) || (flanco == 1 && valor_medido < trigger_valor_11)) {
+	        if ((flanco == 0 && (valor_medido > trigger_valor_11)) || (flanco == 1 && (valor_medido < trigger_valor_09)) ) {
  80019ee:	4b2c      	ldr	r3, [pc, #176]	@ (8001aa0 <ADC_Conversion+0x168>)
  80019f0:	781b      	ldrb	r3, [r3, #0]
  80019f2:	b2db      	uxtb	r3, r3
  80019f4:	2b00      	cmp	r3, #0
  80019f6:	d105      	bne.n	8001a04 <ADC_Conversion+0xcc>
- 80019f8:	4b2a      	ldr	r3, [pc, #168]	@ (8001aa4 <ADC_Conversion+0x16c>)
+ 80019f8:	4b2b      	ldr	r3, [pc, #172]	@ (8001aa8 <ADC_Conversion+0x170>)
  80019fa:	881b      	ldrh	r3, [r3, #0]
  80019fc:	b29b      	uxth	r3, r3
  80019fe:	88fa      	ldrh	r2, [r7, #6]
@@ -3835,7 +3835,7 @@ uint8_t ADC_Conversion(){
  8001a08:	b2db      	uxtb	r3, r3
  8001a0a:	2b01      	cmp	r3, #1
  8001a0c:	d10b      	bne.n	8001a26 <ADC_Conversion+0xee>
- 8001a0e:	4b26      	ldr	r3, [pc, #152]	@ (8001aa8 <ADC_Conversion+0x170>)
+ 8001a0e:	4b25      	ldr	r3, [pc, #148]	@ (8001aa4 <ADC_Conversion+0x16c>)
  8001a10:	881b      	ldrh	r3, [r3, #0]
  8001a12:	b29b      	uxth	r3, r3
  8001a14:	88fa      	ldrh	r2, [r7, #6]
@@ -3901,6 +3901,7 @@ uint8_t ADC_Conversion(){
  8001a72:	4b0a      	ldr	r3, [pc, #40]	@ (8001a9c <ADC_Conversion+0x164>)
  8001a74:	2201      	movs	r2, #1
  8001a76:	701a      	strb	r2, [r3, #0]
+
 	                return 2;
  8001a78:	2302      	movs	r3, #2
  8001a7a:	e004      	b.n	8001a86 <ADC_Conversion+0x14e>
@@ -4664,7 +4665,7 @@ void fsm(estados_t *estado, eventos_t eventos) {
  8001f34:	d123      	bne.n	8001f7e <fsm+0x43a>
                     plotInicio();
  8001f36:	f7ff fb55 	bl	80015e4 <plotInicio>
-                    max_buff_trigger = (OFFSET == 1) ? ((muestras == 0) ? 6 : 11) : ((muestras == 0) ? 11 : 22);
+                    max_buff_trigger = (OFFSET == 1) ? ((muestras == 0) ? 6 : 11) : ((muestras == 0) ? 11 : 220);
  8001f3a:	4b83      	ldr	r3, [pc, #524]	@ (8002148 <fsm+0x604>)
  8001f3c:	781b      	ldrb	r3, [r3, #0]
  8001f3e:	b2db      	uxtb	r3, r3
@@ -4686,7 +4687,7 @@ void fsm(estados_t *estado, eventos_t eventos) {
  8001f5e:	d101      	bne.n	8001f64 <fsm+0x420>
  8001f60:	230b      	movs	r3, #11
  8001f62:	e000      	b.n	8001f66 <fsm+0x422>
- 8001f64:	2316      	movs	r3, #22
+ 8001f64:	23dc      	movs	r3, #220	@ 0xdc
  8001f66:	4a7a      	ldr	r2, [pc, #488]	@ (8002150 <fsm+0x60c>)
  8001f68:	7013      	strb	r3, [r2, #0]
                     Swap_Buffer(0);
@@ -4776,6 +4777,7 @@ void fsm(estados_t *estado, eventos_t eventos) {
                 break;
  8001ffa:	e19c      	b.n	8002336 <fsm+0x7f2>
             case TRIGGER_TERMINADO:
+
                 plotConfig();
  8001ffc:	f7ff fa7c 	bl	80014f8 <plotConfig>
                 fillCircle(21, 75, 5, BLUE);
@@ -4998,24 +5000,24 @@ void fsm(estados_t *estado, eventos_t eventos) {
  8002168:	4b79      	ldr	r3, [pc, #484]	@ (8002350 <fsm+0x80c>)
  800216a:	2200      	movs	r2, #0
  800216c:	701a      	strb	r2, [r3, #0]
-    				trigger_valor_09 = trigger_valor - (trigger_valor>>3);
+    				trigger_valor_09 = trigger_valor - (trigger_valor>>2);
  800216e:	4b79      	ldr	r3, [pc, #484]	@ (8002354 <fsm+0x810>)
  8002170:	881b      	ldrh	r3, [r3, #0]
  8002172:	b29a      	uxth	r2, r3
  8002174:	4b77      	ldr	r3, [pc, #476]	@ (8002354 <fsm+0x810>)
  8002176:	881b      	ldrh	r3, [r3, #0]
  8002178:	b29b      	uxth	r3, r3
- 800217a:	08db      	lsrs	r3, r3, #3
+ 800217a:	089b      	lsrs	r3, r3, #2
  800217c:	b29b      	uxth	r3, r3
  800217e:	1ad3      	subs	r3, r2, r3
  8002180:	b29a      	uxth	r2, r3
  8002182:	4b75      	ldr	r3, [pc, #468]	@ (8002358 <fsm+0x814>)
  8002184:	801a      	strh	r2, [r3, #0]
-    				trigger_valor_11 = trigger_valor + (trigger_valor>>3);
+    				trigger_valor_11 = trigger_valor + (trigger_valor>>2);
  8002186:	4b73      	ldr	r3, [pc, #460]	@ (8002354 <fsm+0x810>)
  8002188:	881b      	ldrh	r3, [r3, #0]
  800218a:	b29b      	uxth	r3, r3
- 800218c:	08db      	lsrs	r3, r3, #3
+ 800218c:	089b      	lsrs	r3, r3, #2
  800218e:	b29a      	uxth	r2, r3
  8002190:	4b70      	ldr	r3, [pc, #448]	@ (8002354 <fsm+0x810>)
  8002192:	881b      	ldrh	r3, [r3, #0]
@@ -5077,24 +5079,24 @@ void fsm(estados_t *estado, eventos_t eventos) {
  80021e8:	4b59      	ldr	r3, [pc, #356]	@ (8002350 <fsm+0x80c>)
  80021ea:	2200      	movs	r2, #0
  80021ec:	701a      	strb	r2, [r3, #0]
-    				trigger_valor_09 = trigger_valor - (trigger_valor>>6);
+    				trigger_valor_09 = trigger_valor - (trigger_valor>>2);
  80021ee:	4b59      	ldr	r3, [pc, #356]	@ (8002354 <fsm+0x810>)
  80021f0:	881b      	ldrh	r3, [r3, #0]
  80021f2:	b29a      	uxth	r2, r3
  80021f4:	4b57      	ldr	r3, [pc, #348]	@ (8002354 <fsm+0x810>)
  80021f6:	881b      	ldrh	r3, [r3, #0]
  80021f8:	b29b      	uxth	r3, r3
- 80021fa:	099b      	lsrs	r3, r3, #6
+ 80021fa:	089b      	lsrs	r3, r3, #2
  80021fc:	b29b      	uxth	r3, r3
  80021fe:	1ad3      	subs	r3, r2, r3
  8002200:	b29a      	uxth	r2, r3
  8002202:	4b55      	ldr	r3, [pc, #340]	@ (8002358 <fsm+0x814>)
  8002204:	801a      	strh	r2, [r3, #0]
-    				trigger_valor_11 = trigger_valor + (trigger_valor>>6);
+    				trigger_valor_11 = trigger_valor + (trigger_valor>>2);
  8002206:	4b53      	ldr	r3, [pc, #332]	@ (8002354 <fsm+0x810>)
  8002208:	881b      	ldrh	r3, [r3, #0]
  800220a:	b29b      	uxth	r3, r3
- 800220c:	099b      	lsrs	r3, r3, #6
+ 800220c:	089b      	lsrs	r3, r3, #2
  800220e:	b29a      	uxth	r2, r3
  8002210:	4b50      	ldr	r3, [pc, #320]	@ (8002354 <fsm+0x810>)
  8002212:	881b      	ldrh	r3, [r3, #0]

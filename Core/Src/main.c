@@ -720,14 +720,14 @@ uint8_t ADC_Conversion(){
 
 
 	    if (trigger_flag == 1) {
-	        if ((flanco == 0 && valor_medido < trigger_valor_09) || (flanco == 1 && valor_medido > trigger_valor_11)) {
+	        if ((flanco == 0 && (valor_medido < trigger_valor_09)) || (flanco == 1 && (valor_medido > trigger_valor_11)) ) {
 	            trigger_en_condiciones = 1;
 	            trigger_flag = 0;
 	        }
 	    }
 
 	    if (trigger_en_condiciones == 1) {
-	        if ((flanco == 0 && valor_medido > trigger_valor_09) || (flanco == 1 && valor_medido < trigger_valor_11)) {
+	        if ((flanco == 0 && (valor_medido > trigger_valor_11)) || (flanco == 1 && (valor_medido < trigger_valor_09)) ) {
 	            trigger_activado = 1;
 	            trigger_en_condiciones = 0;
 	        }
@@ -741,6 +741,7 @@ uint8_t ADC_Conversion(){
 	                trigger_contador = 0;
 	                trigger_activado = 0;
 	                trigger_flag = 1;
+
 	                return 2;
 	            }
 	        }
@@ -921,7 +922,7 @@ void fsm(estados_t *estado, eventos_t eventos) {
             case INICIO:
                 if (*estado == GUARDANDO_EN_PING) {
                     plotInicio();
-                    max_buff_trigger = (OFFSET == 1) ? ((muestras == 0) ? 6 : 11) : ((muestras == 0) ? 11 : 22);
+                    max_buff_trigger = (OFFSET == 1) ? ((muestras == 0) ? 6 : 11) : ((muestras == 0) ? 11 : 220);
                     Swap_Buffer(0);
                     HAL_TIM_Base_Start_IT(&htim2);
                     HAL_ADC_Start(&hadc1);
@@ -943,6 +944,7 @@ void fsm(estados_t *estado, eventos_t eventos) {
                 }
                 break;
             case TRIGGER_TERMINADO:
+
                 plotConfig();
                 fillCircle(21, 75, 5, BLUE);
                 break;
@@ -1001,8 +1003,8 @@ void fsm(estados_t *estado, eventos_t eventos) {
                 if (*estado == C_TRIGGER) {
 
                 	ADC_TRIGGER_flag = 0;
-    				trigger_valor_09 = trigger_valor - (trigger_valor>>3);
-    				trigger_valor_11 = trigger_valor + (trigger_valor>>3);
+    				trigger_valor_09 = trigger_valor - (trigger_valor>>2);
+    				trigger_valor_11 = trigger_valor + (trigger_valor>>2);
 
                     HAL_ADC_Stop(&hadc2);
                     plotConfig();
@@ -1017,8 +1019,8 @@ void fsm(estados_t *estado, eventos_t eventos) {
                 if (*estado == C_TRIGGER) {
 
                 	ADC_TRIGGER_flag = 0;
-    				trigger_valor_09 = trigger_valor - (trigger_valor>>6);
-    				trigger_valor_11 = trigger_valor + (trigger_valor>>6);
+    				trigger_valor_09 = trigger_valor - (trigger_valor>>2);
+    				trigger_valor_11 = trigger_valor + (trigger_valor>>2);
 
                     HAL_ADC_Stop(&hadc2);
                     plotConfig();

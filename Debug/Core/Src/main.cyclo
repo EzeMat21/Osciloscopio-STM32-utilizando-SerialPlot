@@ -14,8 +14,8 @@
 ../Core/Src/main.c:654:6:HAL_GPIO_EXTI_Callback	4
 ../Core/Src/main.c:677:6:HAL_TIM_PeriodElapsedCallback	4
 ../Core/Src/main.c:702:9:ADC_Conversion	16
-../Core/Src/main.c:758:6:Swap_Buffer	2
-../Core/Src/main.c:769:6:UART_TX_PING	1
-../Core/Src/main.c:780:6:UART_TX_PONG	1
-../Core/Src/main.c:789:6:fsm	87
-../Core/Src/main.c:1076:6:Error_Handler	1
+../Core/Src/main.c:759:6:Swap_Buffer	2
+../Core/Src/main.c:770:6:UART_TX_PING	1
+../Core/Src/main.c:781:6:UART_TX_PONG	1
+../Core/Src/main.c:790:6:fsm	87
+../Core/Src/main.c:1078:6:Error_Handler	1
