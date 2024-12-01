@@ -5000,24 +5000,24 @@ void fsm(estados_t *estado, eventos_t eventos) {
  8002168:	4b79      	ldr	r3, [pc, #484]	@ (8002350 <fsm+0x80c>)
  800216a:	2200      	movs	r2, #0
  800216c:	701a      	strb	r2, [r3, #0]
-    				trigger_valor_09 = trigger_valor - (trigger_valor>>2);
+    				trigger_valor_09 = trigger_valor - (trigger_valor>>3);
  800216e:	4b79      	ldr	r3, [pc, #484]	@ (8002354 <fsm+0x810>)
  8002170:	881b      	ldrh	r3, [r3, #0]
  8002172:	b29a      	uxth	r2, r3
  8002174:	4b77      	ldr	r3, [pc, #476]	@ (8002354 <fsm+0x810>)
  8002176:	881b      	ldrh	r3, [r3, #0]
  8002178:	b29b      	uxth	r3, r3
- 800217a:	089b      	lsrs	r3, r3, #2
+ 800217a:	08db      	lsrs	r3, r3, #3
  800217c:	b29b      	uxth	r3, r3
  800217e:	1ad3      	subs	r3, r2, r3
  8002180:	b29a      	uxth	r2, r3
  8002182:	4b75      	ldr	r3, [pc, #468]	@ (8002358 <fsm+0x814>)
  8002184:	801a      	strh	r2, [r3, #0]
-    				trigger_valor_11 = trigger_valor + (trigger_valor>>2);
+    				trigger_valor_11 = trigger_valor + (trigger_valor>>3);
  8002186:	4b73      	ldr	r3, [pc, #460]	@ (8002354 <fsm+0x810>)
  8002188:	881b      	ldrh	r3, [r3, #0]
  800218a:	b29b      	uxth	r3, r3
- 800218c:	089b      	lsrs	r3, r3, #2
+ 800218c:	08db      	lsrs	r3, r3, #3
  800218e:	b29a      	uxth	r2, r3
  8002190:	4b70      	ldr	r3, [pc, #448]	@ (8002354 <fsm+0x810>)
  8002192:	881b      	ldrh	r3, [r3, #0]
@@ -5079,24 +5079,24 @@ void fsm(estados_t *estado, eventos_t eventos) {
  80021e8:	4b59      	ldr	r3, [pc, #356]	@ (8002350 <fsm+0x80c>)
  80021ea:	2200      	movs	r2, #0
  80021ec:	701a      	strb	r2, [r3, #0]
-    				trigger_valor_09 = trigger_valor - (trigger_valor>>2);
+    				trigger_valor_09 = trigger_valor - (trigger_valor>>3);
  80021ee:	4b59      	ldr	r3, [pc, #356]	@ (8002354 <fsm+0x810>)
  80021f0:	881b      	ldrh	r3, [r3, #0]
  80021f2:	b29a      	uxth	r2, r3
  80021f4:	4b57      	ldr	r3, [pc, #348]	@ (8002354 <fsm+0x810>)
  80021f6:	881b      	ldrh	r3, [r3, #0]
  80021f8:	b29b      	uxth	r3, r3
- 80021fa:	089b      	lsrs	r3, r3, #2
+ 80021fa:	08db      	lsrs	r3, r3, #3
  80021fc:	b29b      	uxth	r3, r3
  80021fe:	1ad3      	subs	r3, r2, r3
  8002200:	b29a      	uxth	r2, r3
  8002202:	4b55      	ldr	r3, [pc, #340]	@ (8002358 <fsm+0x814>)
  8002204:	801a      	strh	r2, [r3, #0]
-    				trigger_valor_11 = trigger_valor + (trigger_valor>>2);
+    				trigger_valor_11 = trigger_valor + (trigger_valor>>3);
  8002206:	4b53      	ldr	r3, [pc, #332]	@ (8002354 <fsm+0x810>)
  8002208:	881b      	ldrh	r3, [r3, #0]
  800220a:	b29b      	uxth	r3, r3
- 800220c:	089b      	lsrs	r3, r3, #2
+ 800220c:	08db      	lsrs	r3, r3, #3
  800220e:	b29a      	uxth	r2, r3
  8002210:	4b50      	ldr	r3, [pc, #320]	@ (8002354 <fsm+0x810>)
  8002212:	881b      	ldrh	r3, [r3, #0]
